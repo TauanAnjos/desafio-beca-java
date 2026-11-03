@@ -45,7 +45,7 @@ public class UserController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public UserResponse create(@Valid @RequestBody UserRequest request) {
-        return UserResponse.from(createUser.execute(new SaveUserCommand(request.name(), request.email())));
+        return UserResponse.from(createUser.execute(toCommand(request)));
     }
 
     @GetMapping
@@ -60,12 +60,16 @@ public class UserController {
 
     @PutMapping("/{id}")
     public UserResponse update(@PathVariable Long id, @Valid @RequestBody UserRequest request) {
-        return UserResponse.from(updateUser.execute(id, new SaveUserCommand(request.name(), request.email())));
+        return UserResponse.from(updateUser.execute(id, toCommand(request)));
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable Long id) {
         deleteUser.deleteById(id);
+    }
+
+    private SaveUserCommand toCommand(UserRequest request) {
+        return new SaveUserCommand(request.name(), request.email(), request.password());
     }
 }

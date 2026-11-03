@@ -6,6 +6,7 @@ import br.com.tauan.ms1_usuarios.application.port.in.GetUserUseCase;
 import br.com.tauan.ms1_usuarios.application.port.in.ListUsersUseCase;
 import br.com.tauan.ms1_usuarios.application.port.in.SaveUserCommand;
 import br.com.tauan.ms1_usuarios.application.port.in.UpdateUserUseCase;
+import br.com.tauan.ms1_usuarios.application.port.out.PasswordEncoderPort;
 import br.com.tauan.ms1_usuarios.application.port.out.UserRepositoryPort;
 import br.com.tauan.ms1_usuarios.domain.exception.EmailAlreadyRegisteredException;
 import br.com.tauan.ms1_usuarios.domain.exception.UserNotFoundException;
@@ -20,9 +21,11 @@ public class UserService implements CreateUserUseCase, ListUsersUseCase, GetUser
         UpdateUserUseCase, DeleteUserUseCase {
 
     private final UserRepositoryPort repository;
+    private final PasswordEncoderPort passwordEncoder;
 
-    public UserService(UserRepositoryPort repository) {
+    public UserService(UserRepositoryPort repository, PasswordEncoderPort passwordEncoder) {
         this.repository = repository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -32,7 +35,8 @@ public class UserService implements CreateUserUseCase, ListUsersUseCase, GetUser
         if (repository.existsByEmail(email)) {
             throw new EmailAlreadyRegisteredException(email);
         }
-        return repository.save(User.newUser(command.name().trim(), email));
+        String hash = passwordEncoder.encode(command.password());
+        return repository.save(User.newUser(command.name().trim(), email, hash));
     }
 
     @Override
@@ -55,15 +59,17 @@ public class UserService implements CreateUserUseCase, ListUsersUseCase, GetUser
         if (repository.existsByEmailAndIdNot(email, id)) {
             throw new EmailAlreadyRegisteredException(email);
         }
-        user.changeData(command.name().trim(), email);
+        user.changeData(command.name().trim(), email, passwordEncoder.encode(command.password()));
         return repository.save(user);
     }
+
     @Override
     @Transactional
     public void deleteById(Long id) {
         find(id);
         repository.deleteById(id);
     }
+
     private User find(Long id) {
         return repository.findById(id).orElseThrow(() -> new UserNotFoundException(id));
     }

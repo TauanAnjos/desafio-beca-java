@@ -7,26 +7,30 @@ public class User {
     private final Long id;
     private String name;
     private String email;
+    private String passwordHash;
     private final LocalDateTime createdAt;
 
-    public User(Long id, String name, String email, LocalDateTime createdAt) {
+    public User(Long id, String name, String email, String passwordHash, LocalDateTime createdAt) {
         this.id = id;
         this.name = name;
         this.email = email;
+        this.passwordHash = passwordHash;
         this.createdAt = createdAt;
     }
 
-    public static User newUser(String name, String email) {
-        return new User(null, name, email, LocalDateTime.now());
+    public static User newUser(String name, String email, String passwordHash) {
+        return new User(null, name, email, passwordHash, LocalDateTime.now());
     }
 
-    public void changeData(String name, String email) {
+    public void changeData(String name, String email, String passwordHash) {
         this.name = name;
         this.email = email;
+        this.passwordHash = passwordHash;
     }
 
     public Long getId() { return id; }
     public String getName() { return name; }
     public String getEmail() { return email; }
+    public String getPasswordHash() { return passwordHash; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 }
