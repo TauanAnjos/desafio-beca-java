@@ -1,12 +1,20 @@
 package br.com.tauan.ms1_usuarios.adapter.in.web.dto;
 
 import br.com.tauan.ms1_usuarios.application.port.in.ImportUsersResult;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
 
-public record ImportUsersResponse(int imported, int skipped, List<RowErrorResponse> errors) {
+public record ImportUsersResponse(
+        @Schema(example = "4") int imported,
+        @Schema(example = "1") int skipped,
+        List<RowErrorResponse> errors
+) {
 
-    public record RowErrorResponse(int line, String reason) {
+    public record RowErrorResponse(
+            @Schema(example = "3") int line,
+            @Schema(example = "invalid email") String reason
+    ) {
     }
 
     public static ImportUsersResponse from(ImportUsersResult result) {
