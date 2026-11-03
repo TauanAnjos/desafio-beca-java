@@ -1,6 +1,7 @@
 package br.com.tauan.ms1_usuarios.adapter.in.web;
 
 import br.com.tauan.ms1_usuarios.domain.exception.EmailAlreadyRegisteredException;
+import br.com.tauan.ms1_usuarios.domain.exception.InvalidCsvFileException;
 import br.com.tauan.ms1_usuarios.domain.exception.UserNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -22,6 +23,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(EmailAlreadyRegisteredException.class)
     public ProblemDetail conflict(EmailAlreadyRegisteredException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidCsvFileException.class)
+    public ProblemDetail invalidCsv(InvalidCsvFileException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
