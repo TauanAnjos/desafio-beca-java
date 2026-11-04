@@ -1,5 +1,6 @@
 package br.com.tauan.ms2_transacoes.adapter.in.web;
 
+import br.com.tauan.ms2_transacoes.domain.exception.AccountServiceUnavailableException;
 import br.com.tauan.ms2_transacoes.domain.exception.InvalidTransactionException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -16,6 +17,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidTransactionException.class)
     public ProblemDetail invalidTransaction(InvalidTransactionException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    @ExceptionHandler(AccountServiceUnavailableException.class)
+    public ProblemDetail accountServiceUnavailable(AccountServiceUnavailableException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
