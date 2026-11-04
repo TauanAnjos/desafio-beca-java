@@ -1,6 +1,7 @@
 package br.com.tauan.ms1_usuarios.application.service;
 
 import br.com.tauan.ms1_usuarios.application.port.in.SaveUserCommand;
+import br.com.tauan.ms1_usuarios.application.port.in.UpdateUserCommand;
 import br.com.tauan.ms1_usuarios.application.port.out.PasswordEncoderPort;
 import br.com.tauan.ms1_usuarios.application.port.out.UserRepositoryPort;
 import br.com.tauan.ms1_usuarios.domain.exception.EmailAlreadyRegisteredException;
@@ -92,14 +93,14 @@ class UserServiceTest {
     }
 
     @Test
-    void update_changesDataAndRehashesPassword() {
+    void update_withPassword_changesDataAndRehashesPassword() {
         User user = existingUser();
         when(repository.findById(1L)).thenReturn(Optional.of(user));
         when(repository.existsByEmailAndIdNot("novo@exemplo.com", 1L)).thenReturn(false);
         when(passwordEncoder.encode("NovaSenha1")).thenReturn("newHash");
         when(repository.save(user)).thenReturn(user);
 
-        User result = service.execute(1L, new SaveUserCommand(" Novo Nome ", "NOVO@Exemplo.com", "NovaSenha1"));
+        User result = service.execute(1L, new UpdateUserCommand(" Novo Nome ", "NOVO@Exemplo.com", "NovaSenha1"));
 
         assertThat(result.getName()).isEqualTo("Novo Nome");
         assertThat(result.getEmail()).isEqualTo("novo@exemplo.com");
@@ -107,11 +108,25 @@ class UserServiceTest {
     }
 
     @Test
+    void update_withoutPassword_keepsCurrentHash() {
+        User user = existingUser();
+        when(repository.findById(1L)).thenReturn(Optional.of(user));
+        when(repository.existsByEmailAndIdNot("novo@exemplo.com", 1L)).thenReturn(false);
+        when(repository.save(user)).thenReturn(user);
+
+        User result = service.execute(1L, new UpdateUserCommand("Novo Nome", "novo@exemplo.com", null));
+
+        assertThat(result.getName()).isEqualTo("Novo Nome");
+        assertThat(result.getPasswordHash()).isEqualTo("oldHash");
+        verifyNoInteractions(passwordEncoder);
+    }
+
+    @Test
     void update_withEmailOfAnotherUser_throwsAndDoesNotSave() {
         when(repository.findById(1L)).thenReturn(Optional.of(existingUser()));
         when(repository.existsByEmailAndIdNot("outro@exemplo.com", 1L)).thenReturn(true);
 
-        assertThatThrownBy(() -> service.execute(1L, new SaveUserCommand("Nome", "outro@exemplo.com", "Senha@1234")))
+        assertThatThrownBy(() -> service.execute(1L, new UpdateUserCommand("Nome", "outro@exemplo.com", "Senha@1234")))
                 .isInstanceOf(EmailAlreadyRegisteredException.class);
 
         verify(repository, never()).save(any(User.class));
@@ -122,7 +137,7 @@ class UserServiceTest {
     void update_whenNotFound_throws() {
         when(repository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.execute(99L, new SaveUserCommand("Nome", "a@exemplo.com", "Senha@1234")))
+        assertThatThrownBy(() -> service.execute(99L, new UpdateUserCommand("Nome", "a@exemplo.com", null)))
                 .isInstanceOf(UserNotFoundException.class);
 
         verify(repository, never()).save(any(User.class));

@@ -22,9 +22,12 @@ public class User {
         return new User(null, name, email, passwordHash, LocalDateTime.now());
     }
 
-    public void changeData(String name, String email, String passwordHash) {
+    public void changeData(String name, String email) {
         this.name = name;
         this.email = email;
+    }
+
+    public void changePasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;
     }
 

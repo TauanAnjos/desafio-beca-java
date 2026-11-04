@@ -1,5 +1,6 @@
 package br.com.tauan.ms1_usuarios.adapter.in.web;
 
+import br.com.tauan.ms1_usuarios.adapter.in.web.dto.UpdateUserRequest;
 import br.com.tauan.ms1_usuarios.adapter.in.web.dto.UserRequest;
 import br.com.tauan.ms1_usuarios.adapter.in.web.dto.UserResponse;
 import br.com.tauan.ms1_usuarios.application.port.in.CreateUserUseCase;
@@ -7,6 +8,7 @@ import br.com.tauan.ms1_usuarios.application.port.in.DeleteUserUseCase;
 import br.com.tauan.ms1_usuarios.application.port.in.GetUserUseCase;
 import br.com.tauan.ms1_usuarios.application.port.in.ListUsersUseCase;
 import br.com.tauan.ms1_usuarios.application.port.in.SaveUserCommand;
+import br.com.tauan.ms1_usuarios.application.port.in.UpdateUserCommand;
 import br.com.tauan.ms1_usuarios.application.port.in.UpdateUserUseCase;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -59,7 +61,8 @@ public class UserController {
     @ApiResponse(responseCode = "409", description = "E-mail já cadastrado",
             content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     public UserResponse create(@Valid @RequestBody UserRequest request) {
-        return UserResponse.from(createUser.execute(toCommand(request)));
+        return UserResponse.from(createUser.execute(
+                new SaveUserCommand(request.name(), request.email(), request.password())));
     }
 
     @GetMapping
@@ -80,7 +83,8 @@ public class UserController {
 
     @PutMapping("/{id}")
     @Operation(summary = "Atualiza um usuário",
-            description = "Substitui nome, e-mail e senha. A senha é guardada com BCrypt.")
+            description = "Substitui nome e e-mail. A senha é opcional: só é trocada (e recriptografada "
+                    + "com BCrypt) se vier no corpo.")
     @ApiResponse(responseCode = "200", description = "Usuário atualizado")
     @ApiResponse(responseCode = "400", description = "Dados inválidos (lista de campos em 'fields')",
             content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
@@ -88,8 +92,9 @@ public class UserController {
             content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(responseCode = "409", description = "E-mail já usado por outro usuário",
             content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
-    public UserResponse update(@PathVariable Long id, @Valid @RequestBody UserRequest request) {
-        return UserResponse.from(updateUser.execute(id, toCommand(request)));
+    public UserResponse update(@PathVariable Long id, @Valid @RequestBody UpdateUserRequest request) {
+        return UserResponse.from(updateUser.execute(id,
+                new UpdateUserCommand(request.name(), request.email(), request.password())));
     }
 
     @DeleteMapping("/{id}")
@@ -100,9 +105,5 @@ public class UserController {
             content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     public void delete(@PathVariable Long id) {
         deleteUser.deleteById(id);
-    }
-
-    private SaveUserCommand toCommand(UserRequest request) {
-        return new SaveUserCommand(request.name(), request.email(), request.password());
     }
 }

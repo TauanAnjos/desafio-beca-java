@@ -5,6 +5,7 @@ import br.com.tauan.ms1_usuarios.application.port.in.DeleteUserUseCase;
 import br.com.tauan.ms1_usuarios.application.port.in.GetUserUseCase;
 import br.com.tauan.ms1_usuarios.application.port.in.ListUsersUseCase;
 import br.com.tauan.ms1_usuarios.application.port.in.SaveUserCommand;
+import br.com.tauan.ms1_usuarios.application.port.in.UpdateUserCommand;
 import br.com.tauan.ms1_usuarios.application.port.in.UpdateUserUseCase;
 import br.com.tauan.ms1_usuarios.application.port.out.PasswordEncoderPort;
 import br.com.tauan.ms1_usuarios.application.port.out.UserRepositoryPort;
@@ -53,13 +54,16 @@ public class UserService implements CreateUserUseCase, ListUsersUseCase, GetUser
 
     @Override
     @Transactional
-    public User execute(Long id, SaveUserCommand command) {
+    public User execute(Long id, UpdateUserCommand command) {
         User user = find(id);
         String email = normalize(command.email());
         if (repository.existsByEmailAndIdNot(email, id)) {
             throw new EmailAlreadyRegisteredException(email);
         }
-        user.changeData(command.name().trim(), email, passwordEncoder.encode(command.password()));
+        user.changeData(command.name().trim(), email);
+        if (command.newPassword() != null && !command.newPassword().isBlank()) {
+            user.changePasswordHash(passwordEncoder.encode(command.newPassword()));
+        }
         return repository.save(user);
     }
 
