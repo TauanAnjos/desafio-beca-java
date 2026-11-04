@@ -17,6 +17,7 @@ O acompanhamento das tarefas está no quadro Kanban do Jira (espaço **Desafio B
 - Apache Commons CSV para a importação
 - springdoc-openapi (Swagger UI)
 - JUnit 5, Mockito e AssertJ nos testes
+- Flyway (migrations do banco)
 
 ## Arquitetura do MS1 (hexagonal)
 
@@ -72,9 +73,8 @@ docker compose ps
 ```
 
 Os dois containers (`user-db` e `transaction-db`) devem ficar `healthy`. O Compose lê o `.env` sozinho.
-
-> Se você mudar o usuário ou a senha no `.env` depois que o banco já foi criado, o Postgres continua com os valores antigos. Recrie os volumes (apaga os dados): `docker compose down -v` e `docker compose up -d`.
-
+ 
+> O esquema do banco é criado pelo Flyway ao subir o MS1 (arquivos em ms1-usuarios/src/main/resources/db/migration). Se você mudar usuário ou senha no .env depois que o banco já foi criado, o Postgres mantém os valores antigos: recrie os volumes (apaga os dados) com docker compose down -v e docker compose up -d.
 ### 3. Rodar o MS1
 
 O MS1 lê `USER_DB_NAME`, `USER_DB_USER` e `USER_DB_PASSWORD` do ambiente. A URL do banco aponta para `localhost:5434`, a porta publicada pelo Compose.
@@ -137,7 +137,7 @@ Regras:
 - O e-mail é normalizado (sem espaços, em minúsculas) no cadastro, na atualização e na importação, e é único.
 - A senha tem de 8 a 72 caracteres, é guardada com BCrypt e **nunca** aparece nas respostas.
 - Erros usam `ProblemDetail`. Validação responde 400 com a lista de campos em `fields`. E-mail duplicado, inclusive em requisições simultâneas, responde 409.
-
+- - No PUT a senha é opcional: se vier, é recriptografada; se não vier, a atual é mantida.
 ## Importação em massa (CSV)
 
 Arquivo de exemplo: [`exemplos/usuarios.csv`](exemplos/usuarios.csv)
