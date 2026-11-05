@@ -13,12 +13,17 @@ import java.time.Duration;
 public class MockApiClientConfig {
 
     @Bean
-    public RestClient mockApiRestClient(@Value("${mockapi.base-url}") String baseUrl) {
+    public RestClient mockApiRestClient(@Value("${mockapi.base-url}") String baseUrl,
+                                        @Value("${mockapi.timeout-ms:3000}") long timeoutMillis) {
+        return restClient(baseUrl, Duration.ofMillis(timeoutMillis));
+    }
+
+    static RestClient restClient(String baseUrl, Duration timeout) {
         HttpClient httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(3))
+                .connectTimeout(timeout)
                 .build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
-        requestFactory.setReadTimeout(Duration.ofSeconds(3));
+        requestFactory.setReadTimeout(timeout);
         return RestClient.builder()
                 .baseUrl(baseUrl)
                 .requestFactory(requestFactory)
