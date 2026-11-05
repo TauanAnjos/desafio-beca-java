@@ -9,11 +9,15 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 @Component
 public class TransactionPersistenceAdapter implements TransactionRepositoryPort {
+
+    private static final LocalDateTime EARLIEST = LocalDateTime.of(1970, 1, 1, 0, 0);
+    private static final LocalDateTime LATEST = LocalDateTime.of(9999, 12, 31, 23, 59);
 
     private final TransactionJpaRepository jpaRepository;
 
@@ -39,6 +43,18 @@ public class TransactionPersistenceAdapter implements TransactionRepositoryPort 
         BigDecimal total = jpaRepository.sumAmount(userId, TransactionStatus.APPROVED, expenseTypes,
                 fromInclusive, toExclusive);
         return total == null ? BigDecimal.ZERO : total;
+    }
+
+    @Override
+    public List<Transaction> findByUser(Long userId, LocalDateTime fromInclusive, LocalDateTime toExclusive,
+                                        TransactionType type) {
+        Collection<TransactionType> types = type == null ? List.of(TransactionType.values()) : List.of(type);
+        return jpaRepository.search(userId, types,
+                        fromInclusive == null ? EARLIEST : fromInclusive,
+                        toExclusive == null ? LATEST : toExclusive)
+                .stream()
+                .map(this::toDomain)
+                .toList();
     }
 
     private TransactionJpaEntity toEntity(Transaction transaction) {
