@@ -55,9 +55,17 @@ class TransactionPolicyTest {
     }
 
     @Test
+    void amountEqualToTheAvailableBalance_isApproved() {
+        TransactionDecision decision = evaluate(TransactionType.WITHDRAWAL, "600",
+                account("1000", "3000", "1000"), "400");
+
+        assertThat(decision.approved()).isTrue();
+    }
+
+    @Test
     void sumEqualToTheDailyLimit_isApproved() {
         TransactionDecision decision = evaluate(TransactionType.PURCHASE, "500",
-                account("1000", "3000", "500"), "2500");
+                account("5000", "3000", "500"), "2500");
 
         assertThat(decision.approved()).isTrue();
     }
@@ -82,6 +90,30 @@ class TransactionPolicyTest {
     }
 
     @Test
+    void balanceIsReducedByWhatWasAlreadySpentToday() {
+        AccountInfo account = account("1000", "3000", "1000");
+
+        TransactionDecision first = evaluate(TransactionType.WITHDRAWAL, "900", account, "0");
+        TransactionDecision second = evaluate(TransactionType.WITHDRAWAL, "900", account, "900");
+        TransactionDecision third = evaluate(TransactionType.WITHDRAWAL, "900", account, "1800");
+
+        assertThat(first.approved()).isTrue();
+        assertThat(second.approved()).isFalse();
+        assertThat(second.reason()).isEqualTo("insufficient balance");
+        assertThat(third.approved()).isFalse();
+        assertThat(third.reason()).isEqualTo("insufficient balance");
+    }
+
+    @Test
+    void spentGreaterThanTheBalance_leavesNothingAvailable() {
+        TransactionDecision decision = evaluate(TransactionType.PURCHASE, "1",
+                account("500", "3000", "500"), "800");
+
+        assertThat(decision.approved()).isFalse();
+        assertThat(decision.reason()).isEqualTo("insufficient balance");
+    }
+
+    @Test
     void purchase_aboveThePerTransactionLimit_isRejected() {
         TransactionDecision decision = evaluate(TransactionType.PURCHASE, "600",
                 account("1000", "3000", "500"), null);
@@ -93,7 +125,7 @@ class TransactionPolicyTest {
     @Test
     void transfer_thatPassesTheDailyLimit_isRejected() {
         TransactionDecision decision = evaluate(TransactionType.TRANSFER, "500",
-                account("1000", "3000", "500"), "2600");
+                account("10000", "3000", "500"), "2600");
 
         assertThat(decision.approved()).isFalse();
         assertThat(decision.reason()).isEqualTo("daily limit exceeded");
