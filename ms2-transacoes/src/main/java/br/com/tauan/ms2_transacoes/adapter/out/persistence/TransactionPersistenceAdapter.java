@@ -2,8 +2,14 @@ package br.com.tauan.ms2_transacoes.adapter.out.persistence;
 
 import br.com.tauan.ms2_transacoes.application.port.out.TransactionRepositoryPort;
 import br.com.tauan.ms2_transacoes.domain.model.Transaction;
+import br.com.tauan.ms2_transacoes.domain.model.TransactionStatus;
+import br.com.tauan.ms2_transacoes.domain.model.TransactionType;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 
 @Component
@@ -23,6 +29,16 @@ public class TransactionPersistenceAdapter implements TransactionRepositoryPort 
     @Override
     public Optional<Transaction> findById(Long id) {
         return jpaRepository.findById(id).map(this::toDomain);
+    }
+
+    @Override
+    public BigDecimal sumApprovedExpenses(Long userId, LocalDateTime fromInclusive, LocalDateTime toExclusive) {
+        List<TransactionType> expenseTypes = Arrays.stream(TransactionType.values())
+                .filter(TransactionType::isExpense)
+                .toList();
+        BigDecimal total = jpaRepository.sumAmount(userId, TransactionStatus.APPROVED, expenseTypes,
+                fromInclusive, toExclusive);
+        return total == null ? BigDecimal.ZERO : total;
     }
 
     private TransactionJpaEntity toEntity(Transaction transaction) {
