@@ -4,5 +4,13 @@ public enum TransactionType {
     DEPOSIT,
     WITHDRAWAL,
     TRANSFER,
-    PURCHASE
+    PURCHASE;
+
+    /**
+     * Saídas de dinheiro: retirada, transferência enviada e compra.
+     * Só elas consultam saldo e limites e contam como despesa.
+     */
+    public boolean isExpense() {
+        return this != DEPOSIT;
+    }
 }
