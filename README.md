@@ -5,7 +5,7 @@ Projeto do desafio da Beca Bradesco Java (NTT DATA). A API de gestão financeira
 | Serviço | O que faz | Situação |
 |---|---|---|
 | **MS1 User Service** (`ms1-usuarios/`) | Cadastro e manutenção de usuários, importação em massa por CSV | CRUD, CSV, senha com BCrypt, Flyway, testes e Swagger prontos. Falta o login (Spring Security) |
-| **MS2 Transaction Service** (`ms2-transacoes/`) | Transações, saldo e limites, câmbio, análise de despesas, relatório e segurança | Em desenvolvimento: domínio, banco, integração com a API Mock e regras de aprovação prontos. Endpoints a caminho |
+| **MS2 Transaction Service** (`ms2-transacoes/`) | Transações, saldo e limites, câmbio, análise de despesas, relatório e segurança | Criação e consulta de transações, regras de aprovação e integração com a API Mock prontas. Faltam câmbio, análise de despesas, relatório e autenticação |
 
 O acompanhamento das tarefas está no quadro Kanban do Jira (espaço **Desafio Beca Java**, chave `DBJ`). Os commits trazem a chave do cartão na mensagem.
 
@@ -49,16 +49,18 @@ ms2-transacoes/src/main/java/br/com/tauan/ms2_transacoes/
 ├── domain/
 │   ├── model/                  Transaction (imutável), TransactionPolicy, TransactionDecision,
 │   │                           AccountInfo, enums (TransactionType, TransactionStatus, Category)
-│   └── exception/              InvalidTransactionException, AccountServiceUnavailableException
+│   └── exception/              InvalidTransactionException, TransactionNotFoundException,
+│                               AccountServiceUnavailableException
 ├── application/
-│   ├── port/in/                Casos de uso (em construção)
+│   ├── port/in/                Casos de uso (criar, consultar e listar transações) e comandos
 │   ├── port/out/               TransactionRepositoryPort, AccountPort
-│   └── service/                Implementação dos casos de uso (em construção)
-└── adapter/
-    ├── in/web/                 DTOs e tratamento de erros (400 e 503)
-    └── out/
-        ├── persistence/        Entidade JPA, repositório Spring Data e adapter
-        └── client/             Cliente HTTP da API Mock (saldo e limites)
+│   └── service/                CreateTransactionService, QueryTransactionsService
+├── adapter/
+│   ├── in/web/                 Controllers, DTOs e tratamento de erros (400, 404 e 503)
+│   └── out/
+│       ├── persistence/        Entidade JPA, repositório Spring Data e adapter
+│       └── client/             Cliente HTTP da API Mock (saldo e limites)
+└── config/                     Beans (relógio e política de aprovação)
 ```
 
 ## Como rodar
@@ -124,7 +126,7 @@ O saldo e os limites da conta não ficam no nosso banco: vêm de um serviço sim
 MOCK_API_BASE_URL=https://SEU_ID.mockapi.io/api/v1
 ```
 
-O MS2 consulta `GET {MOCK_API_BASE_URL}/accounts?userId={id}`, com timeout de 3 segundos.
+O MS2 consulta `GET {MOCK_API_BASE_URL}/accounts?userId={id}`. O tempo limite é de 3 segundos (propriedade opcional `mockapi.timeout-ms`). Se a API Mock falhar ou demorar, a transação não é aprovada às cegas: a resposta é 503 e nada é gravado.
 
 ### 4. Rodar um serviço
 
@@ -178,7 +180,7 @@ set -a; source ../.env; set +a
 
 Com o MS1 no ar: `http://localhost:8081/swagger-ui/index.html`
 
-A especificação OpenAPI em JSON fica em `http://localhost:8081/v3/api-docs`. O Swagger do MS2 entra junto com os endpoints dele.
+A especificação OpenAPI em JSON fica em `http://localhost:8081/v3/api-docs`. O Swagger do MS2 entra em uma tarefa própria do quadro.
 
 ## Endpoints do MS1
 
@@ -196,6 +198,26 @@ Regras:
 - A senha tem de 8 a 72 caracteres, é guardada com BCrypt e **nunca** aparece nas respostas.
 - No `PUT` a senha é opcional: se vier, é recriptografada; se não vier, a atual é mantida.
 - Erros usam `ProblemDetail`. Validação responde 400 com a lista de campos em `fields`. E-mail duplicado, inclusive em requisições simultâneas, responde 409.
+
+## Endpoints do MS2
+
+> **Provisório:** enquanto a autenticação não existe, o dono da transação vem do cabeçalho `X-User-Id`. As tarefas de segurança substituem esse cabeçalho pelo usuário autenticado.
+
+| Método | Rota | Descrição | Respostas |
+|---|---|---|---|
+| POST | `/transactions` | Registra uma transação (depósito, retirada, transferência ou compra) | 201, 400, 503 |
+| GET | `/transactions/{id}` | Consulta uma transação do usuário | 200, 404 |
+| GET | `/transactions` | Lista as transações do usuário, da mais recente para a mais antiga | 200, 400 |
+
+- `POST` responde **201** tanto para transação aprovada quanto para rejeitada: o resultado vem em `status` (`APPROVED` ou `REJECTED`) e `rejectionReason`. Pedido inválido responde 400 sem consultar a API Mock. Se a API Mock estiver fora do ar, responde 503 e nada é gravado
+- `GET /transactions` aceita os filtros opcionais `from` e `to` (`yyyy-MM-dd`, o dia `to` entra por inteiro) e `type` (`DEPOSIT`, `WITHDRAWAL`, `TRANSFER`, `PURCHASE`). `from` depois de `to` responde 400
+- Transação de outro usuário responde 404
+
+Exemplo de corpo do `POST`:
+
+```json
+{ "type": "PURCHASE", "amount": 50.00, "description": "Mercado", "category": "FOOD" }
+```
 
 ## Importação em massa (CSV)
 
@@ -230,9 +252,11 @@ Toda transação termina em **APPROVED** ou **REJECTED** (com o motivo) e nunca 
 |---|---|
 | Depósito | Sempre aprovado. Não consulta a API Mock |
 | Retirada, transferência e compra | Consultam saldo e limites na API Mock. Sem conta: `account not found for the user` |
-| | 1º saldo suficiente, senão `insufficient balance` |
+| | 1º valor dentro do **saldo disponível** (saldo da API Mock menos as despesas aprovadas do dia), senão `insufficient balance` |
 | | 2º valor dentro do limite por transação, senão `amount exceeds the per-transaction limit` |
 | | 3º gasto do dia mais o valor dentro do limite diário, senão `daily limit exceeded` |
+
+O MS2 não debita o saldo da API Mock, por isso o saldo disponível desconta o que já foi aprovado no dia. Só retiradas, transferências e compras aprovadas contam como despesa.
 
 Consistência da transação, validada no domínio:
 - Valor maior que zero, com no máximo 2 casas decimais
@@ -247,6 +271,7 @@ Consistência da transação, validada no domínio:
 - **Câmbio:** a taxa será guardada na transação, no momento da criação (snapshot), e não consultada a cada leitura. Assim o valor convertido não muda depois e a consulta nunca depende da BrasilAPI. Se a BrasilAPI estiver fora do ar na criação, a transação é criada sem taxas e a resposta sinaliza que a conversão não está disponível
 - **Migrations:** o esquema de cada banco é versionado com Flyway e o Hibernate só valida (`ddl-auto=validate`)
 - **Pasta das migrations:** `src/main/resources/db/migration` (uma pasta `db` com `migration` dentro, não um pacote com ponto)
+- **Criação de transação sem `@Transactional`:** a chamada HTTP à API Mock não deve segurar uma conexão do banco
 - **Correção de transação sem apagar:** em definição (estorno como nova transação)
 
 ## Testes
@@ -258,7 +283,7 @@ Em cada serviço (`ms1-usuarios/` ou `ms2-transacoes/`):
 ```
 
 - MS1: testes unitários do `UserService` e do `ImportUsersService`
-- MS2: testes do domínio (`Transaction`, `TransactionPolicy`), do tratamento de erros e do adapter da API Mock (servidor HTTP simulado)
+- MS2: testes do domínio (`Transaction`, `TransactionPolicy`), dos casos de uso, dos controllers (MockMvc), do tratamento de erros e do adapter da API Mock (servidor HTTP simulado e teste de timeout)
 
 Todos rodam sem banco e sem internet. O relatório de cobertura será configurado em uma tarefa própria do quadro (JaCoCo).
 
@@ -271,4 +296,4 @@ Todos rodam sem banco e sem internet. O relatório de cobertura será configurad
 ## Fluxo de trabalho
 
 - Uma branch por atividade, com o código do Jira no nome (`feature/DBJ-39-...`) e nos commits (`feat: DBJ-39 ...`)
-- Pull Request aberto e revisado antes de entrar na `main`
+- Pull Request aberto e revisado antes de entrar na `main`; merge feito com merge commit
