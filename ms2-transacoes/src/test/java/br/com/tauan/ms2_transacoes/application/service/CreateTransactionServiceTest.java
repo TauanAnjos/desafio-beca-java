@@ -109,7 +109,7 @@ class CreateTransactionServiceTest {
 
     @Test
     void purchase_thatPassesTheDailyLimit_usesTheSpentOfTheCurrentDay() {
-        when(accountPort.findByUserId(1L)).thenReturn(Optional.of(account("1000", "3000", "500")));
+        when(accountPort.findByUserId(1L)).thenReturn(Optional.of(account("10000", "3000", "500")));
         when(repository.sumApprovedExpenses(1L, DAY_START, DAY_END)).thenReturn(new BigDecimal("2600"));
         saveReturnsTheSameTransaction();
 
@@ -118,6 +118,18 @@ class CreateTransactionServiceTest {
         assertThat(result.getStatus()).isEqualTo(TransactionStatus.REJECTED);
         assertThat(result.getRejectionReason()).isEqualTo("daily limit exceeded");
         assertThat(result.getCategory()).isEqualTo(Category.FOOD);
+    }
+
+    @Test
+    void withdrawal_afterSpendingMostOfTheBalanceToday_isRejectedForBalance() {
+        when(accountPort.findByUserId(1L)).thenReturn(Optional.of(account("1000", "3000", "1000")));
+        when(repository.sumApprovedExpenses(1L, DAY_START, DAY_END)).thenReturn(new BigDecimal("900"));
+        saveReturnsTheSameTransaction();
+
+        Transaction result = service.execute(command(TransactionType.WITHDRAWAL, "900", null, null));
+
+        assertThat(result.getStatus()).isEqualTo(TransactionStatus.REJECTED);
+        assertThat(result.getRejectionReason()).isEqualTo("insufficient balance");
     }
 
     @Test
