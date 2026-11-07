@@ -195,4 +195,15 @@ class CreateTransactionServiceTest {
 
         assertThat(result.getOccurredAt()).isEqualTo(LocalDateTime.of(2026, 11, 6, 0, 30));
     }
+    @Test
+    void withdrawal_usesTheDepositsOfTheDayInTheAvailableBalance() {
+        when(accountPort.findByUserId(1L)).thenReturn(Optional.of(account("100", "3000", "1000")));
+        when(repository.sumApprovedExpenses(1L, DAY_START, DAY_END)).thenReturn(BigDecimal.ZERO);
+        when(repository.sumApprovedIncome(1L, DAY_START, DAY_END)).thenReturn(new BigDecimal("900"));
+        saveReturnsTheSameTransaction();
+
+        Transaction result = service.execute(command(TransactionType.WITHDRAWAL, "800", null, null));
+
+        assertThat(result.getStatus()).isEqualTo(TransactionStatus.APPROVED);
+    }
 }

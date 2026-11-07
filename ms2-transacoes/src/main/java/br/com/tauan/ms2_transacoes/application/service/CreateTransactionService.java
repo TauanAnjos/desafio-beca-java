@@ -46,17 +46,20 @@ public class CreateTransactionService implements CreateTransactionUseCase {
 
         AccountInfo account = null;
         BigDecimal spentToday = null;
+        BigDecimal receivedToday = null;
         if (candidate.getType().isExpense()) {
             account = accountPort.findByUserId(candidate.getUserId()).orElse(null);
             if (account != null) {
                 LocalDate today = now.toLocalDate();
-                spentToday = repository.sumApprovedExpenses(candidate.getUserId(),
-                        today.atStartOfDay(), today.plusDays(1).atStartOfDay());
+                LocalDateTime dayStart = today.atStartOfDay();
+                LocalDateTime dayEnd = today.plusDays(1).atStartOfDay();
+                spentToday = repository.sumApprovedExpenses(candidate.getUserId(), dayStart, dayEnd);
+                receivedToday = repository.sumApprovedIncome(candidate.getUserId(), dayStart, dayEnd);
             }
         }
 
         TransactionDecision decision = policy.evaluate(candidate.getType(), candidate.getAmount(),
-                account, spentToday);
+                account, spentToday, receivedToday);
         if (decision.approved()) {
             return repository.save(candidate);
         }
