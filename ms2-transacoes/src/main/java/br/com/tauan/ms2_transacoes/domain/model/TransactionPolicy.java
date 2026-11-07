@@ -4,6 +4,12 @@ import br.com.tauan.ms2_transacoes.domain.exception.InvalidTransactionException;
 
 import java.math.BigDecimal;
 
+/**
+ * Regras de aprovação. Java puro: recebe os dados já buscados e devolve a decisão.
+ *
+ * O saldo da API Mock não é debitado por este serviço. Por isso o saldo DISPONÍVEL é o saldo
+ * informado menos o que já foi aprovado como despesa no dia.
+ */
 public class TransactionPolicy {
 
     /**
@@ -25,13 +31,16 @@ public class TransactionPolicy {
         if (account == null) {
             return TransactionDecision.reject("account not found for the user");
         }
-        if (amount.compareTo(account.balance()) > 0) {
+
+        BigDecimal alreadySpent = spentToday == null ? BigDecimal.ZERO : spentToday;
+        BigDecimal availableBalance = account.balance().subtract(alreadySpent);
+
+        if (amount.compareTo(availableBalance) > 0) {
             return TransactionDecision.reject("insufficient balance");
         }
         if (amount.compareTo(account.perTransactionLimit()) > 0) {
             return TransactionDecision.reject("amount exceeds the per-transaction limit");
         }
-        BigDecimal alreadySpent = spentToday == null ? BigDecimal.ZERO : spentToday;
         if (alreadySpent.add(amount).compareTo(account.dailyLimit()) > 0) {
             return TransactionDecision.reject("daily limit exceeded");
         }

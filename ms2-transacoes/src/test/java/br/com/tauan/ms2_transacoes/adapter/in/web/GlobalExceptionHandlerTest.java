@@ -1,5 +1,6 @@
 package br.com.tauan.ms2_transacoes.adapter.in.web;
 
+import br.com.tauan.ms2_transacoes.domain.exception.AccountServiceUnavailableException;
 import br.com.tauan.ms2_transacoes.domain.exception.InvalidTransactionException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ProblemDetail;
@@ -17,5 +18,14 @@ class GlobalExceptionHandlerTest {
 
         assertThat(problem.getStatus()).isEqualTo(400);
         assertThat(problem.getDetail()).isEqualTo("amount must be greater than zero");
+    }
+
+    @Test
+    void accountServiceUnavailable_isMappedToServiceUnavailable() {
+        ProblemDetail problem = handler.accountServiceUnavailable(
+                new AccountServiceUnavailableException("Account service is unavailable"));
+
+        assertThat(problem.getStatus()).isEqualTo(503);
+        assertThat(problem.getDetail()).isEqualTo("Account service is unavailable");
     }
 }
