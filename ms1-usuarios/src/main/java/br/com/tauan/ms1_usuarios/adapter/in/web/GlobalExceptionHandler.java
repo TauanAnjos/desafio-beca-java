@@ -3,6 +3,7 @@ package br.com.tauan.ms1_usuarios.adapter.in.web;
 import br.com.tauan.ms1_usuarios.domain.exception.EmailAlreadyRegisteredException;
 import br.com.tauan.ms1_usuarios.domain.exception.InvalidCsvFileException;
 import br.com.tauan.ms1_usuarios.domain.exception.UserNotFoundException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -23,6 +24,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(EmailAlreadyRegisteredException.class)
     public ProblemDetail conflict(EmailAlreadyRegisteredException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ProblemDetail integrityViolation(DataIntegrityViolationException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
+                "Data conflict: a unique constraint was violated");
     }
 
     @ExceptionHandler(InvalidCsvFileException.class)

@@ -1,7 +1,9 @@
 package br.com.tauan.ms1_usuarios.adapter.out.persistence;
 
 import br.com.tauan.ms1_usuarios.application.port.out.UserRepositoryPort;
+import br.com.tauan.ms1_usuarios.domain.exception.EmailAlreadyRegisteredException;
 import br.com.tauan.ms1_usuarios.domain.model.User;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -18,7 +20,11 @@ public class UserPersistenceAdapter implements UserRepositoryPort {
 
     @Override
     public User save(User user) {
-        return toDomain(jpaRepository.save(toEntity(user)));
+        try {
+            return toDomain(jpaRepository.saveAndFlush(toEntity(user)));
+        } catch (DataIntegrityViolationException e) {
+            throw new EmailAlreadyRegisteredException(user.getEmail());
+        }
     }
 
     @Override
@@ -51,11 +57,13 @@ public class UserPersistenceAdapter implements UserRepositoryPort {
         entity.setId(user.getId());
         entity.setName(user.getName());
         entity.setEmail(user.getEmail());
+        entity.setPasswordHash(user.getPasswordHash());
         entity.setCreatedAt(user.getCreatedAt());
         return entity;
     }
 
     private User toDomain(UserJpaEntity entity) {
-        return new User(entity.getId(), entity.getName(), entity.getEmail(), entity.getCreatedAt());
+        return new User(entity.getId(), entity.getName(), entity.getEmail(),
+                entity.getPasswordHash(), entity.getCreatedAt());
     }
 }

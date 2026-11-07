@@ -1,11 +1,18 @@
 package br.com.tauan.ms1_usuarios.adapter.in.web.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 public record UserRequest(
+        @Schema(example = "Ana Souza")
         @NotBlank @Size(max = 120) String name,
-        @NotBlank @Email @Size(max = 160) String email
+
+        @Schema(example = "ana.souza@exemplo.com")
+        @NotBlank @Email @Size(max = 160) String email,
+
+        @Schema(example = "Senha@1234", description = "De 8 a 72 caracteres")
+        @NotBlank @Size(min = 8, max = 72) String password
 ) {
 }

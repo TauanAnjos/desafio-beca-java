@@ -1,6 +1,6 @@
-name,email
-Ana Souza,ana.souza@exemplo.com
-Bruno Lima,bruno.lima@exemplo.com
-Carla Dias,carla.dias@exemplo.com
-Diego Rocha,diego.rocha@exemplo.com
-Elisa Matos,elisa.matos@exemplo.com
+name,email,password
+Ana Souza,ana.souza@exemplo.com,Senha@1234
+Bruno Lima,bruno.lima@exemplo.com,Senha@1234
+"Souza, Carla Dias",carla.dias@exemplo.com,Senha@1234
+Diego Rocha,diego.rocha@exemplo.com,Senha@1234
+Elisa Matos,elisa.matos@exemplo.com,Senha@1234
