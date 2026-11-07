@@ -48,6 +48,7 @@ class CreateTransactionServiceTest {
     private AccountPort accountPort;
 
     private CreateTransactionService service;
+    private static final ZoneId BRASILIA = ZoneId.of("America/Sao_Paulo");
 
     @BeforeEach
     void setUp() {
@@ -161,5 +162,37 @@ class CreateTransactionServiceTest {
                 .isInstanceOf(AccountServiceUnavailableException.class);
 
         verify(repository, never()).save(any(Transaction.class));
+    }
+
+    @Test
+    void atTheEndOfTheDayInBrasilia_theWindowIsStillTheSameDay() {
+        // 2026-11-06T02:30Z equivale a 23:30 do dia 5 em Brasília (em UTC já seria dia 6)
+        Clock lateEvening = Clock.fixed(Instant.parse("2026-11-06T02:30:00Z"), BRASILIA);
+        CreateTransactionService brasiliaService =
+                new CreateTransactionService(repository, accountPort, new TransactionPolicy(), lateEvening);
+        when(accountPort.findByUserId(1L)).thenReturn(Optional.of(account("1000", "3000", "500")));
+        when(repository.sumApprovedExpenses(1L, LocalDateTime.of(2026, 11, 5, 0, 0),
+                LocalDateTime.of(2026, 11, 6, 0, 0))).thenReturn(BigDecimal.ZERO);
+        saveReturnsTheSameTransaction();
+
+        Transaction result = brasiliaService.execute(command(TransactionType.WITHDRAWAL, "100", null, null));
+
+        assertThat(result.getOccurredAt()).isEqualTo(LocalDateTime.of(2026, 11, 5, 23, 30));
+    }
+
+    @Test
+    void afterMidnightInBrasilia_theNextDayWindowIsUsed() {
+        // 2026-11-06T03:30Z equivale a 00:30 do dia 6 em Brasília
+        Clock afterMidnight = Clock.fixed(Instant.parse("2026-11-06T03:30:00Z"), BRASILIA);
+        CreateTransactionService brasiliaService =
+                new CreateTransactionService(repository, accountPort, new TransactionPolicy(), afterMidnight);
+        when(accountPort.findByUserId(1L)).thenReturn(Optional.of(account("1000", "3000", "500")));
+        when(repository.sumApprovedExpenses(1L, LocalDateTime.of(2026, 11, 6, 0, 0),
+                LocalDateTime.of(2026, 11, 7, 0, 0))).thenReturn(BigDecimal.ZERO);
+        saveReturnsTheSameTransaction();
+
+        Transaction result = brasiliaService.execute(command(TransactionType.WITHDRAWAL, "100", null, null));
+
+        assertThat(result.getOccurredAt()).isEqualTo(LocalDateTime.of(2026, 11, 6, 0, 30));
     }
 }
