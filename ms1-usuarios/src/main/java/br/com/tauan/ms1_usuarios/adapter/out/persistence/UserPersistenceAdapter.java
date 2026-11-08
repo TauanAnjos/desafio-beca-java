@@ -33,6 +33,11 @@ public class UserPersistenceAdapter implements UserRepositoryPort {
     }
 
     @Override
+    public Optional<User> findByEmail(String email) {
+        return jpaRepository.findByEmail(email).map(this::toDomain);
+    }
+
+    @Override
     public List<User> findAll() {
         return jpaRepository.findAll().stream().map(this::toDomain).toList();
     }
