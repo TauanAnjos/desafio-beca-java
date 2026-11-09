@@ -14,18 +14,21 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withBadRequest;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withUnauthorizedRequest;
 
 class UsersServiceAuthenticationAdapterTest {
 
     private static final String URL = "http://users.test/auth/login";
+    private static final String KEY = "chave-de-teste";
 
     private MockRestServiceServer server;
     private UsersServiceAuthenticationAdapter adapter;
@@ -34,13 +37,14 @@ class UsersServiceAuthenticationAdapterTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder().baseUrl("http://users.test");
         server = MockRestServiceServer.bindTo(builder).build();
-        adapter = new UsersServiceAuthenticationAdapter(builder.build());
+        adapter = new UsersServiceAuthenticationAdapter(builder.build(), KEY);
     }
 
     @Test
-    void authenticate_withValidCredentials_returnsTheUser() {
+    void authenticate_withValidCredentials_returnsTheUser_andSendsTheInternalKey() {
         server.expect(requestTo(URL))
                 .andExpect(method(HttpMethod.POST))
+                .andExpect(header("X-Internal-Key", KEY))
                 .andExpect(jsonPath("$.email").value("ana@exemplo.com"))
                 .andExpect(jsonPath("$.password").value("Senha@1234"))
                 .andRespond(withSuccess("""
@@ -68,6 +72,14 @@ class UsersServiceAuthenticationAdapterTest {
     }
 
     @Test
+    void authenticate_whenTheInternalKeyIsRejected_isTreatedAsUnavailable() {
+        server.expect(requestTo(URL)).andRespond(withStatus(org.springframework.http.HttpStatus.FORBIDDEN));
+
+        assertThatThrownBy(() -> adapter.authenticate("ana@exemplo.com", "Senha@1234"))
+                .isInstanceOf(UserServiceUnavailableException.class);
+    }
+
+    @Test
     void authenticate_whenTheUserServiceFails_throwsUnavailable() {
         server.expect(requestTo(URL)).andRespond(withServerError());
 
@@ -85,8 +97,7 @@ class UsersServiceAuthenticationAdapterTest {
 
     @Test
     void authenticate_withAnIncompleteResponse_throwsUnavailable() {
-        server.expect(requestTo(URL))
-                .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(URL)).andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
 
         assertThatThrownBy(() -> adapter.authenticate("ana@exemplo.com", "Senha@1234"))
                 .isInstanceOf(UserServiceUnavailableException.class)
