@@ -52,4 +52,8 @@ public class GlobalExceptionHandler {
         problem.setProperty("fields", fields);
         return problem;
     }
+    @ExceptionHandler(InvalidInternalKeyException.class)
+    public ProblemDetail invalidInternalKey(InvalidInternalKeyException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
 }

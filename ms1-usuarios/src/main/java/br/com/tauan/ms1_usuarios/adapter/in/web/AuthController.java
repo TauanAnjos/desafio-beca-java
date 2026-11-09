@@ -13,6 +13,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -22,21 +23,28 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthenticateUserUseCase authenticateUser;
+    private final InternalKeyGuard internalKeyGuard;
 
-    public AuthController(AuthenticateUserUseCase authenticateUser) {
+    public AuthController(AuthenticateUserUseCase authenticateUser, InternalKeyGuard internalKeyGuard) {
         this.authenticateUser = authenticateUser;
+        this.internalKeyGuard = internalKeyGuard;
     }
 
     @PostMapping("/login")
     @Operation(summary = "Verifica e-mail e senha",
-            description = "Usada pelo MS2 para autenticar o usuário. E-mail inexistente e senha errada "
-                    + "devolvem a mesma resposta 401.")
+            description = "Rota interna, usada pelo MS2: exige o cabeçalho X-Internal-Key. "
+                    + "E-mail inexistente e senha errada devolvem a mesma resposta 401.")
     @ApiResponse(responseCode = "200", description = "Credenciais válidas")
     @ApiResponse(responseCode = "400", description = "Corpo inválido (lista de campos em 'fields')",
             content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(responseCode = "401", description = "Credenciais inválidas",
             content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
-    public LoginResponse login(@Valid @RequestBody LoginRequest request) {
+    @ApiResponse(responseCode = "403", description = "Chave interna ausente ou inválida",
+            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+    public LoginResponse login(
+            @RequestHeader(value = "X-Internal-Key", required = false) String internalKey,
+            @Valid @RequestBody LoginRequest request) {
+        internalKeyGuard.verify(internalKey);
         return LoginResponse.from(authenticateUser.execute(
                 new AuthenticateUserCommand(request.email(), request.password())));
     }
