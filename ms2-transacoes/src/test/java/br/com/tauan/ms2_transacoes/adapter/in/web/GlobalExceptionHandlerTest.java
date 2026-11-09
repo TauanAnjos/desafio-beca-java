@@ -2,6 +2,7 @@ package br.com.tauan.ms2_transacoes.adapter.in.web;
 
 import br.com.tauan.ms2_transacoes.domain.exception.AccountServiceUnavailableException;
 import br.com.tauan.ms2_transacoes.domain.exception.InvalidTransactionException;
+import br.com.tauan.ms2_transacoes.domain.exception.ForbiddenAccessException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ProblemDetail;
 
@@ -27,5 +28,12 @@ class GlobalExceptionHandlerTest {
 
         assertThat(problem.getStatus()).isEqualTo(503);
         assertThat(problem.getDetail()).isEqualTo("Account service is unavailable");
+    }
+    @Test
+    void forbiddenAccess_isMappedTo403() {
+        ProblemDetail problem = handler.forbidden(new ForbiddenAccessException("You can only access your own transactions"));
+
+        assertThat(problem.getStatus()).isEqualTo(403);
+        assertThat(problem.getDetail()).isEqualTo("You can only access your own transactions");
     }
 }

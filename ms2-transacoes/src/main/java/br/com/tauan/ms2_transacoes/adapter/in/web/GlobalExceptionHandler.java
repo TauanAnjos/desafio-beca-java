@@ -1,6 +1,7 @@
 package br.com.tauan.ms2_transacoes.adapter.in.web;
 
 import br.com.tauan.ms2_transacoes.domain.exception.AccountServiceUnavailableException;
+import br.com.tauan.ms2_transacoes.domain.exception.ForbiddenAccessException;
 import br.com.tauan.ms2_transacoes.domain.exception.InvalidTransactionException;
 import br.com.tauan.ms2_transacoes.domain.exception.TransactionNotFoundException;
 import org.springframework.http.HttpStatus;
@@ -18,6 +19,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidTransactionException.class)
     public ProblemDetail invalidTransaction(InvalidTransactionException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    @ExceptionHandler(ForbiddenAccessException.class)
+    public ProblemDetail forbidden(ForbiddenAccessException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 
     @ExceptionHandler(TransactionNotFoundException.class)
