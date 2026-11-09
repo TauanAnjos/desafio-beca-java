@@ -1,6 +1,7 @@
 package br.com.tauan.ms1_usuarios.adapter.in.web;
 
 import br.com.tauan.ms1_usuarios.domain.exception.EmailAlreadyRegisteredException;
+import br.com.tauan.ms1_usuarios.domain.exception.InvalidCredentialsException;
 import br.com.tauan.ms1_usuarios.domain.exception.InvalidCsvFileException;
 import br.com.tauan.ms1_usuarios.domain.exception.UserNotFoundException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -19,6 +20,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(UserNotFoundException.class)
     public ProblemDetail notFound(UserNotFoundException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ProblemDetail invalidCredentials(InvalidCredentialsException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
     }
 
     @ExceptionHandler(EmailAlreadyRegisteredException.class)
@@ -45,5 +51,9 @@ public class GlobalExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Invalid data");
         problem.setProperty("fields", fields);
         return problem;
+    }
+    @ExceptionHandler(InvalidInternalKeyException.class)
+    public ProblemDetail invalidInternalKey(InvalidInternalKeyException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 }
