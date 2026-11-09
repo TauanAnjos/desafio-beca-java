@@ -12,6 +12,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 
 @Component
 public class TransactionPersistenceAdapter implements TransactionRepositoryPort {
@@ -37,12 +38,12 @@ public class TransactionPersistenceAdapter implements TransactionRepositoryPort 
 
     @Override
     public BigDecimal sumApprovedExpenses(Long userId, LocalDateTime fromInclusive, LocalDateTime toExclusive) {
-        List<TransactionType> expenseTypes = Arrays.stream(TransactionType.values())
-                .filter(TransactionType::isExpense)
-                .toList();
-        BigDecimal total = jpaRepository.sumAmount(userId, TransactionStatus.APPROVED, expenseTypes,
-                fromInclusive, toExclusive);
-        return total == null ? BigDecimal.ZERO : total;
+        return sumApproved(userId, TransactionType::isExpense, fromInclusive, toExclusive);
+    }
+
+    @Override
+    public BigDecimal sumApprovedIncome(Long userId, LocalDateTime fromInclusive, LocalDateTime toExclusive) {
+        return sumApproved(userId, TransactionType::isIncome, fromInclusive, toExclusive);
     }
 
     @Override
@@ -55,6 +56,14 @@ public class TransactionPersistenceAdapter implements TransactionRepositoryPort 
                 .stream()
                 .map(this::toDomain)
                 .toList();
+    }
+
+    private BigDecimal sumApproved(Long userId, Predicate<TransactionType> typeFilter,
+                                   LocalDateTime fromInclusive, LocalDateTime toExclusive) {
+        List<TransactionType> types = Arrays.stream(TransactionType.values()).filter(typeFilter).toList();
+        BigDecimal total = jpaRepository.sumAmount(userId, TransactionStatus.APPROVED, types,
+                fromInclusive, toExclusive);
+        return total == null ? BigDecimal.ZERO : total;
     }
 
     private TransactionJpaEntity toEntity(Transaction transaction) {
