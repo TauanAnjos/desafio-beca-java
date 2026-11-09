@@ -33,6 +33,38 @@ services:
       timeout: 5s
       retries: 5
 
+  ms1-usuarios:
+    build: ./ms1-usuarios
+    container_name: ms1-usuarios
+    depends_on:
+      user-db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://user-db:5432/${USER_DB_NAME}
+      USER_DB_NAME: ${USER_DB_NAME}
+      USER_DB_USER: ${USER_DB_USER}
+      USER_DB_PASSWORD: ${USER_DB_PASSWORD}
+    ports:
+      - "8081:8081"
+
+  ms2-transacoes:
+    build: ./ms2-transacoes
+    container_name: ms2-transacoes
+    depends_on:
+      transaction-db:
+        condition: service_healthy
+      ms1-usuarios:
+        condition: service_started
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://transaction-db:5432/${TRANSACTION_DB_NAME}
+      TRANSACTION_DB_NAME: ${TRANSACTION_DB_NAME}
+      TRANSACTION_DB_USER: ${TRANSACTION_DB_USER}
+      TRANSACTION_DB_PASSWORD: ${TRANSACTION_DB_PASSWORD}
+      MOCK_API_BASE_URL: ${MOCK_API_BASE_URL:?defina MOCK_API_BASE_URL no .env}
+      USERS_SERVICE_URL: http://ms1-usuarios:8081
+    ports:
+      - "8082:8082"
+
 volumes:
   user-db-data:
   transaction-db-data:
