@@ -25,6 +25,31 @@ class ApiAuthenticationEntryPointTest {
     }
 
     @Test
+    void aBrowserNavigation_keepsTheBasicChallenge() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Sec-Fetch-Dest", "document");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        entryPoint.commence(request, response, new BadCredentialsException("x"));
+
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(response.getHeader("WWW-Authenticate")).startsWith("Basic");
+    }
+
+    @Test
+    void aScriptRequest_like_theSwaggerUi_getsThe401WithoutTheChallenge_soTheBrowserDoesNotPrompt() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Sec-Fetch-Dest", "empty");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        entryPoint.commence(request, response, new BadCredentialsException("x"));
+
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(response.getHeader("WWW-Authenticate")).isNull();
+        assertThat(response.getContentAsString()).contains("\"status\":401");
+    }
+
+    @Test
     void whenTheUserServiceFails_return503WithoutTheChallenge() throws Exception {
         MockHttpServletResponse response = new MockHttpServletResponse();
 
