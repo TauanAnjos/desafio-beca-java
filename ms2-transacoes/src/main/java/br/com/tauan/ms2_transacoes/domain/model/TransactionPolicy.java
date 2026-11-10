@@ -39,8 +39,7 @@ public class TransactionPolicy {
         }
 
         BigDecimal alreadySpent = spentToday == null ? BigDecimal.ZERO : spentToday;
-        BigDecimal alreadyReceived = receivedToday == null ? BigDecimal.ZERO : receivedToday;
-        BigDecimal availableBalance = account.balance().add(alreadyReceived).subtract(alreadySpent);
+        BigDecimal availableBalance = account.availableBalance(spentToday, receivedToday);
 
         if (amount.compareTo(availableBalance) > 0) {
             return TransactionDecision.reject("insufficient balance");
