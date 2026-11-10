@@ -21,6 +21,12 @@ public interface TransactionRepositoryPort {
     BigDecimal sumApprovedExpenses(Long userId, LocalDateTime fromInclusive, LocalDateTime toExclusive);
 
     /**
+     * Soma das entradas aprovadas (depósitos) do usuário no período.
+     * Devolve zero se não houver nenhuma.
+     */
+    BigDecimal sumApprovedIncome(Long userId, LocalDateTime fromInclusive, LocalDateTime toExclusive);
+
+    /**
      * Transações do usuário, da mais recente para a mais antiga. Filtros nulos são ignorados.
      */
     List<Transaction> findByUser(Long userId, LocalDateTime fromInclusive, LocalDateTime toExclusive,

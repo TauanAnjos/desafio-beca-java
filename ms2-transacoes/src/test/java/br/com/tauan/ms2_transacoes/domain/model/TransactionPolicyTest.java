@@ -184,4 +184,57 @@ class TransactionPolicyTest {
         assertThat(TransactionType.TRANSFER.isExpense()).isTrue();
         assertThat(TransactionType.PURCHASE.isExpense()).isTrue();
     }
+    // ---------- depósitos do dia ----------
+
+    @Test
+    void depositsOfTheDay_increaseTheAvailableBalance() {
+        // saldo 100 + depósito de 900 = 1000 disponíveis
+        TransactionDecision decision = policy.evaluate(TransactionType.WITHDRAWAL, new BigDecimal("800"),
+                account("100", "3000", "1000"), BigDecimal.ZERO, new BigDecimal("900"));
+
+        assertThat(decision.approved()).isTrue();
+    }
+
+    @Test
+    void withoutTheDeposit_theSameWithdrawalIsRejected() {
+        TransactionDecision decision = policy.evaluate(TransactionType.WITHDRAWAL, new BigDecimal("800"),
+                account("100", "3000", "1000"), BigDecimal.ZERO, BigDecimal.ZERO);
+
+        assertThat(decision.approved()).isFalse();
+        assertThat(decision.reason()).isEqualTo("insufficient balance");
+    }
+
+    @Test
+    void availableBalance_isBalancePlusReceivedMinusSpent() {
+        AccountInfo account = account("500", "3000", "1000");
+        BigDecimal spent = new BigDecimal("600");
+        BigDecimal received = new BigDecimal("300");
+
+        // 500 + 300 - 600 = 200 disponíveis
+        TransactionDecision atTheLimit = policy.evaluate(TransactionType.PURCHASE, new BigDecimal("200"),
+                account, spent, received);
+        TransactionDecision aboveTheLimit = policy.evaluate(TransactionType.PURCHASE, new BigDecimal("201"),
+                account, spent, received);
+
+        assertThat(atTheLimit.approved()).isTrue();
+        assertThat(aboveTheLimit.approved()).isFalse();
+        assertThat(aboveTheLimit.reason()).isEqualTo("insufficient balance");
+    }
+
+    @Test
+    void depositsDoNotRaiseTheDailyLimit() {
+        TransactionDecision decision = policy.evaluate(TransactionType.WITHDRAWAL, new BigDecimal("200"),
+                account("10000", "1000", "1000"), new BigDecimal("900"), new BigDecimal("5000"));
+
+        assertThat(decision.approved()).isFalse();
+        assertThat(decision.reason()).isEqualTo("daily limit exceeded");
+    }
+
+    @Test
+    void onlyDepositIsIncome() {
+        assertThat(TransactionType.DEPOSIT.isIncome()).isTrue();
+        assertThat(TransactionType.WITHDRAWAL.isIncome()).isFalse();
+        assertThat(TransactionType.TRANSFER.isIncome()).isFalse();
+        assertThat(TransactionType.PURCHASE.isIncome()).isFalse();
+    }
 }
