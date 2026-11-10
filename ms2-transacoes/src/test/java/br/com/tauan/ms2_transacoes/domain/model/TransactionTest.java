@@ -7,7 +7,9 @@ import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -202,5 +204,17 @@ class TransactionTest {
                 "Pix", null, null, TransactionStatus.APPROVED, "algum motivo", NOW))
                 .isInstanceOf(InvalidTransactionException.class)
                 .hasMessage("rejection reason is only allowed for rejected transactions");
+    }
+    @Test
+    void withExchangeRates_returnsACopyWithTheRates_andKeepsTheOtherData() {
+        Transaction original = approved(TransactionType.DEPOSIT, "100", "Salário", null, null);
+        ExchangeRate usd = new ExchangeRate("USD", new BigDecimal("5.40"), LocalDate.of(2026, 11, 4));
+
+        Transaction withRates = original.withExchangeRates(List.of(usd));
+
+        assertThat(original.getExchangeRates()).isEmpty();
+        assertThat(withRates.getExchangeRates()).containsExactly(usd);
+        assertThat(withRates.getAmount()).isEqualByComparingTo("100");
+        assertThat(withRates.getStatus()).isEqualTo(TransactionStatus.APPROVED);
     }
 }

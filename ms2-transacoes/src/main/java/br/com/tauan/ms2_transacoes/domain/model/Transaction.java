@@ -4,6 +4,7 @@ import br.com.tauan.ms2_transacoes.domain.exception.InvalidTransactionException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 public class Transaction {
 
@@ -19,10 +20,11 @@ public class Transaction {
     private final TransactionStatus status;
     private final String rejectionReason;
     private final LocalDateTime occurredAt;
+    private final List<ExchangeRate> exchangeRates;
 
     private Transaction(Long id, Long userId, TransactionType type, BigDecimal amount, String description,
                         Category category, Long destinationUserId, TransactionStatus status,
-                        String rejectionReason, LocalDateTime occurredAt) {
+                        String rejectionReason, LocalDateTime occurredAt, List<ExchangeRate> exchangeRates) {
         if (userId == null) {
             throw new InvalidTransactionException("user is required");
         }
@@ -76,27 +78,44 @@ public class Transaction {
         this.status = status;
         this.rejectionReason = rejectionReason == null ? null : rejectionReason.trim();
         this.occurredAt = occurredAt;
+        this.exchangeRates = exchangeRates == null ? List.of() : List.copyOf(exchangeRates);
     }
 
     public static Transaction approved(Long userId, TransactionType type, BigDecimal amount, String description,
                                        Category category, Long destinationUserId, LocalDateTime occurredAt) {
         return new Transaction(null, userId, type, amount, description, category, destinationUserId,
-                TransactionStatus.APPROVED, null, occurredAt);
+                TransactionStatus.APPROVED, null, occurredAt, List.of());
     }
 
     public static Transaction rejected(Long userId, TransactionType type, BigDecimal amount, String description,
                                        Category category, Long destinationUserId, LocalDateTime occurredAt,
                                        String rejectionReason) {
         return new Transaction(null, userId, type, amount, description, category, destinationUserId,
-                TransactionStatus.REJECTED, rejectionReason, occurredAt);
+                TransactionStatus.REJECTED, rejectionReason, occurredAt, List.of());
     }
 
     public static Transaction restore(Long id, Long userId, TransactionType type, BigDecimal amount,
                                       String description, Category category, Long destinationUserId,
                                       TransactionStatus status, String rejectionReason,
                                       LocalDateTime occurredAt) {
+        return restore(id, userId, type, amount, description, category, destinationUserId, status,
+                rejectionReason, occurredAt, List.of());
+    }
+
+    public static Transaction restore(Long id, Long userId, TransactionType type, BigDecimal amount,
+                                      String description, Category category, Long destinationUserId,
+                                      TransactionStatus status, String rejectionReason,
+                                      LocalDateTime occurredAt, List<ExchangeRate> exchangeRates) {
         return new Transaction(id, userId, type, amount, description, category, destinationUserId,
-                status, rejectionReason, occurredAt);
+                status, rejectionReason, occurredAt, exchangeRates);
+    }
+
+    /**
+     * Devolve uma cópia da transação com as cotações do momento da criação (a transação é imutável).
+     */
+    public Transaction withExchangeRates(List<ExchangeRate> rates) {
+        return new Transaction(id, userId, type, amount, description, category, destinationUserId,
+                status, rejectionReason, occurredAt, rates);
     }
 
     public Long getId() { return id; }
@@ -109,4 +128,5 @@ public class Transaction {
     public TransactionStatus getStatus() { return status; }
     public String getRejectionReason() { return rejectionReason; }
     public LocalDateTime getOccurredAt() { return occurredAt; }
+    public List<ExchangeRate> getExchangeRates() { return exchangeRates; }
 }
