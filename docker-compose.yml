@@ -44,6 +44,7 @@ services:
       USER_DB_NAME: ${USER_DB_NAME}
       USER_DB_USER: ${USER_DB_USER}
       USER_DB_PASSWORD: ${USER_DB_PASSWORD}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
     ports:
       - "8081:8081"
 
@@ -62,6 +63,7 @@ services:
       TRANSACTION_DB_PASSWORD: ${TRANSACTION_DB_PASSWORD}
       MOCK_API_BASE_URL: ${MOCK_API_BASE_URL:?defina MOCK_API_BASE_URL no .env}
       USERS_SERVICE_URL: http://ms1-usuarios:8081
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
     ports:
       - "8082:8082"
 
