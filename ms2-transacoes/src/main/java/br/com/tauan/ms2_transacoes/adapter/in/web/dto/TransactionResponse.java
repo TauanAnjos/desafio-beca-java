@@ -26,6 +26,11 @@ public record TransactionResponse(
 ) {
 
     /**
+     * A conversão só está disponível quando as duas moedas (USD e EUR) foram obtidas.
+     */
+    private static final int REQUIRED_CURRENCIES = 2;
+
+    /**
      * O valor "amount" é o original, em reais. A taxa é de reais por unidade da moeda.
      */
     public record Conversion(String currency, BigDecimal rate, LocalDate rateDate, BigDecimal convertedAmount) {
@@ -47,7 +52,7 @@ public record TransactionResponse(
                 transaction.getStatus(),
                 transaction.getRejectionReason(),
                 transaction.getOccurredAt(),
-                !conversions.isEmpty(),
+                conversions.size() >= REQUIRED_CURRENCIES,
                 conversions);
     }
 }

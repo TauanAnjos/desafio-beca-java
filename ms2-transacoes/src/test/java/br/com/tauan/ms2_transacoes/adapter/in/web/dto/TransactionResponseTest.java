@@ -43,4 +43,11 @@ class TransactionResponseTest {
         assertThat(response.conversionAvailable()).isFalse();
         assertThat(response.conversions()).isEmpty();
     }
+    @Test
+    void withOnlyOneCurrency_theConversionIsNotAvailable_butTheRateStillAppears() {
+        TransactionResponse response = TransactionResponse.from(transaction(List.of(
+                new ExchangeRate("USD", new BigDecimal("5.41"), LocalDate.of(2026, 11, 6)))));
+        assertThat(response.conversionAvailable()).isFalse();
+        assertThat(response.conversions()).hasSize(1);
+    }
 }
