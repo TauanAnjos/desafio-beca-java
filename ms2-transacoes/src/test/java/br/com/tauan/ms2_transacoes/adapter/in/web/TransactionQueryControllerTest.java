@@ -4,6 +4,7 @@ import br.com.tauan.ms2_transacoes.application.port.in.GetTransactionUseCase;
 import br.com.tauan.ms2_transacoes.application.port.in.ListTransactionsQuery;
 import br.com.tauan.ms2_transacoes.application.port.in.ListTransactionsUseCase;
 import br.com.tauan.ms2_transacoes.domain.exception.TransactionNotFoundException;
+import br.com.tauan.ms2_transacoes.domain.model.AuthenticatedUser;
 import br.com.tauan.ms2_transacoes.domain.model.Category;
 import br.com.tauan.ms2_transacoes.domain.model.Transaction;
 import br.com.tauan.ms2_transacoes.domain.model.TransactionStatus;
@@ -14,6 +15,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -25,6 +28,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -48,6 +52,11 @@ class TransactionQueryControllerTest {
                 .build();
     }
 
+    private Authentication authenticated(long userId) {
+        return UsernamePasswordAuthenticationToken.authenticated(
+                new AuthenticatedUser(userId, "Ana", "ana@exemplo.com"), null, List.of());
+    }
+
     private Transaction transaction() {
         return Transaction.restore(10L, 1L, TransactionType.PURCHASE, new BigDecimal("50.00"), "Mercado",
                 Category.FOOD, null, TransactionStatus.APPROVED, null, LocalDateTime.of(2026, 11, 5, 10, 0));
@@ -57,7 +66,7 @@ class TransactionQueryControllerTest {
     void get_returnsTheTransaction() throws Exception {
         when(getTransaction.execute(1L, 10L)).thenReturn(transaction());
 
-        mockMvc.perform(get("/transactions/10").header("X-User-Id", "1"))
+        mockMvc.perform(get("/transactions/10").principal(authenticated(1L)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(10))
                 .andExpect(jsonPath("$.status").value("APPROVED"));
@@ -67,17 +76,17 @@ class TransactionQueryControllerTest {
     void get_whenNotFound_returns404() throws Exception {
         when(getTransaction.execute(1L, 99L)).thenThrow(new TransactionNotFoundException(99L));
 
-        mockMvc.perform(get("/transactions/99").header("X-User-Id", "1"))
+        mockMvc.perform(get("/transactions/99").principal(authenticated(1L)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value("Transaction not found: 99"));
     }
 
     @Test
-    void list_passesTheFiltersToTheUseCase() throws Exception {
+    void list_usesTheAuthenticatedUserAndPassesTheFilters() throws Exception {
         when(listTransactions.execute(any(ListTransactionsQuery.class))).thenReturn(List.of(transaction()));
 
         mockMvc.perform(get("/transactions")
-                        .header("X-User-Id", "1")
+                        .principal(authenticated(1L))
                         .param("from", "2026-11-01")
                         .param("to", "2026-11-05")
                         .param("type", "PURCHASE"))
@@ -93,9 +102,26 @@ class TransactionQueryControllerTest {
     }
 
     @Test
+    void list_ofTheOwnUserId_isAllowed() throws Exception {
+        when(listTransactions.execute(any(ListTransactionsQuery.class))).thenReturn(List.of(transaction()));
+
+        mockMvc.perform(get("/transactions").principal(authenticated(1L)).param("userId", "1"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void list_ofAnotherUser_returns403_withoutQueryingAnything() throws Exception {
+        mockMvc.perform(get("/transactions").principal(authenticated(1L)).param("userId", "2"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.detail").value("You can only access your own transactions"));
+
+        verifyNoInteractions(listTransactions);
+    }
+
+    @Test
     void list_withAnInvalidDate_returns400() throws Exception {
         mockMvc.perform(get("/transactions")
-                        .header("X-User-Id", "1")
+                        .principal(authenticated(1L))
                         .param("from", "05/11/2026"))
                 .andExpect(status().isBadRequest());
     }
@@ -103,7 +129,7 @@ class TransactionQueryControllerTest {
     @Test
     void list_withAnInvalidType_returns400() throws Exception {
         mockMvc.perform(get("/transactions")
-                        .header("X-User-Id", "1")
+                        .principal(authenticated(1L))
                         .param("type", "ABC"))
                 .andExpect(status().isBadRequest());
     }

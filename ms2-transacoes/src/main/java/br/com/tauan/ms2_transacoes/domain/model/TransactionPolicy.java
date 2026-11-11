@@ -7,17 +7,23 @@ import java.math.BigDecimal;
 /**
  * Regras de aprovação. Java puro: recebe os dados já buscados e devolve a decisão.
  *
- * O saldo da API Mock não é debitado por este serviço. Por isso o saldo DISPONÍVEL é o saldo
- * informado menos o que já foi aprovado como despesa no dia.
+ * O saldo da API Mock não é atualizado por este serviço. Por isso o saldo DISPONÍVEL é o saldo
+ * informado, mais os depósitos aprovados no dia, menos as despesas aprovadas no dia.
  */
 public class TransactionPolicy {
 
-    /**
-     * @param account    saldo e limites do usuário; nulo se ele não tem conta na API Mock
-     * @param spentToday soma das despesas aprovadas do usuário no dia; nulo conta como zero
-     */
     public TransactionDecision evaluate(TransactionType type, BigDecimal amount,
                                         AccountInfo account, BigDecimal spentToday) {
+        return evaluate(type, amount, account, spentToday, null);
+    }
+
+    /**
+     * @param account       saldo e limites do usuário; nulo se ele não tem conta na API Mock
+     * @param spentToday    soma das despesas aprovadas do usuário no dia; nulo conta como zero
+     * @param receivedToday soma dos depósitos aprovados do usuário no dia; nulo conta como zero
+     */
+    public TransactionDecision evaluate(TransactionType type, BigDecimal amount, AccountInfo account,
+                                        BigDecimal spentToday, BigDecimal receivedToday) {
         if (type == null) {
             throw new InvalidTransactionException("type is required");
         }
@@ -33,7 +39,7 @@ public class TransactionPolicy {
         }
 
         BigDecimal alreadySpent = spentToday == null ? BigDecimal.ZERO : spentToday;
-        BigDecimal availableBalance = account.balance().subtract(alreadySpent);
+        BigDecimal availableBalance = account.availableBalance(spentToday, receivedToday);
 
         if (amount.compareTo(availableBalance) > 0) {
             return TransactionDecision.reject("insufficient balance");

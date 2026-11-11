@@ -2,15 +2,11 @@ package br.com.tauan.ms2_transacoes.application.service;
 
 import br.com.tauan.ms2_transacoes.application.port.in.CreateTransactionCommand;
 import br.com.tauan.ms2_transacoes.application.port.out.AccountPort;
+import br.com.tauan.ms2_transacoes.application.port.out.ExchangeRatePort;
 import br.com.tauan.ms2_transacoes.application.port.out.TransactionRepositoryPort;
 import br.com.tauan.ms2_transacoes.domain.exception.AccountServiceUnavailableException;
 import br.com.tauan.ms2_transacoes.domain.exception.InvalidTransactionException;
-import br.com.tauan.ms2_transacoes.domain.model.AccountInfo;
-import br.com.tauan.ms2_transacoes.domain.model.Category;
-import br.com.tauan.ms2_transacoes.domain.model.Transaction;
-import br.com.tauan.ms2_transacoes.domain.model.TransactionPolicy;
-import br.com.tauan.ms2_transacoes.domain.model.TransactionStatus;
-import br.com.tauan.ms2_transacoes.domain.model.TransactionType;
+import br.com.tauan.ms2_transacoes.domain.model.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,10 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.*;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -43,15 +36,17 @@ class CreateTransactionServiceTest {
 
     @Mock
     private TransactionRepositoryPort repository;
+    @Mock private ExchangeRatePort exchangeRatePort;
 
     @Mock
     private AccountPort accountPort;
 
     private CreateTransactionService service;
+    private static final ZoneId BRASILIA = ZoneId.of("America/Sao_Paulo");
 
     @BeforeEach
     void setUp() {
-        service = new CreateTransactionService(repository, accountPort, new TransactionPolicy(), CLOCK);
+        service = new CreateTransactionService(repository, accountPort, new TransactionPolicy(), CLOCK, exchangeRatePort);
     }
 
     private CreateTransactionCommand command(TransactionType type, String amount, Category category,
@@ -161,5 +156,81 @@ class CreateTransactionServiceTest {
                 .isInstanceOf(AccountServiceUnavailableException.class);
 
         verify(repository, never()).save(any(Transaction.class));
+    }
+
+    @Test
+    void atTheEndOfTheDayInBrasilia_theWindowIsStillTheSameDay() {
+        // 2026-11-06T02:30Z equivale a 23:30 do dia 5 em Brasília (em UTC já seria dia 6)
+        Clock lateEvening = Clock.fixed(Instant.parse("2026-11-06T02:30:00Z"), BRASILIA);
+        CreateTransactionService brasiliaService =
+                new CreateTransactionService(repository, accountPort, new TransactionPolicy(), lateEvening, exchangeRatePort);
+        when(accountPort.findByUserId(1L)).thenReturn(Optional.of(account("1000", "3000", "500")));
+        when(repository.sumApprovedExpenses(1L, LocalDateTime.of(2026, 11, 5, 0, 0),
+                LocalDateTime.of(2026, 11, 6, 0, 0))).thenReturn(BigDecimal.ZERO);
+        saveReturnsTheSameTransaction();
+
+        Transaction result = brasiliaService.execute(command(TransactionType.WITHDRAWAL, "100", null, null));
+
+        assertThat(result.getOccurredAt()).isEqualTo(LocalDateTime.of(2026, 11, 5, 23, 30));
+    }
+
+    @Test
+    void afterMidnightInBrasilia_theNextDayWindowIsUsed() {
+        // 2026-11-06T03:30Z equivale a 00:30 do dia 6 em Brasília
+        Clock afterMidnight = Clock.fixed(Instant.parse("2026-11-06T03:30:00Z"), BRASILIA);
+        CreateTransactionService brasiliaService =
+                new CreateTransactionService(repository, accountPort, new TransactionPolicy(), afterMidnight, exchangeRatePort);
+        when(accountPort.findByUserId(1L)).thenReturn(Optional.of(account("1000", "3000", "500")));
+        when(repository.sumApprovedExpenses(1L, LocalDateTime.of(2026, 11, 6, 0, 0),
+                LocalDateTime.of(2026, 11, 7, 0, 0))).thenReturn(BigDecimal.ZERO);
+        saveReturnsTheSameTransaction();
+
+        Transaction result = brasiliaService.execute(command(TransactionType.WITHDRAWAL, "100", null, null));
+
+        assertThat(result.getOccurredAt()).isEqualTo(LocalDateTime.of(2026, 11, 6, 0, 30));
+    }
+    @Test
+    void withdrawal_usesTheDepositsOfTheDayInTheAvailableBalance() {
+        when(accountPort.findByUserId(1L)).thenReturn(Optional.of(account("100", "3000", "1000")));
+        when(repository.sumApprovedExpenses(1L, DAY_START, DAY_END)).thenReturn(BigDecimal.ZERO);
+        when(repository.sumApprovedIncome(1L, DAY_START, DAY_END)).thenReturn(new BigDecimal("900"));
+        saveReturnsTheSameTransaction();
+
+        Transaction result = service.execute(command(TransactionType.WITHDRAWAL, "800", null, null));
+
+        assertThat(result.getStatus()).isEqualTo(TransactionStatus.APPROVED);
+    }
+    @Test
+    void theRatesOfTheMomentAreSavedWithTheTransaction() {
+        when(exchangeRatePort.findLatest("USD"))
+                .thenReturn(Optional.of(new ExchangeRate("USD", new BigDecimal("5.40"), LocalDate.of(2026, 11, 4))));
+        when(exchangeRatePort.findLatest("EUR"))
+                .thenReturn(Optional.of(new ExchangeRate("EUR", new BigDecimal("6.20"), LocalDate.of(2026, 11, 4))));
+        saveReturnsTheSameTransaction();
+
+        Transaction result = service.execute(command(TransactionType.DEPOSIT, "100", null, null));
+
+        assertThat(result.getExchangeRates()).extracting(ExchangeRate::currency).containsExactly("USD", "EUR");
+    }
+
+    @Test
+    void whenTheRatesAreUnavailable_theTransactionIsStillCreatedWithoutThem() {
+        saveReturnsTheSameTransaction();
+
+        Transaction result = service.execute(command(TransactionType.DEPOSIT, "100", null, null));
+
+        assertThat(result.getStatus()).isEqualTo(TransactionStatus.APPROVED);
+        assertThat(result.getExchangeRates()).isEmpty();
+    }
+
+    @Test
+    void whenTheRateLookupBlowsUp_theTransactionIsStillCreatedWithoutRates() {
+        when(exchangeRatePort.findLatest("USD")).thenThrow(new IllegalStateException("boom"));
+        saveReturnsTheSameTransaction();
+
+        Transaction result = service.execute(command(TransactionType.DEPOSIT, "100", null, null));
+
+        assertThat(result.getStatus()).isEqualTo(TransactionStatus.APPROVED);
+        assertThat(result.getExchangeRates()).isEmpty();
     }
 }

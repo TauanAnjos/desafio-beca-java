@@ -13,4 +13,11 @@ public enum TransactionType {
     public boolean isExpense() {
         return this != DEPOSIT;
     }
+
+    /**
+     * Entradas de dinheiro que aumentam o saldo disponível do dia.
+     */
+    public boolean isIncome() {
+        return this == DEPOSIT;
+    }
 }
