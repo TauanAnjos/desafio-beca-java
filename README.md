@@ -1,299 +1,164 @@
-# Desafio Beca Java: API de Gestão Financeira
+# API de Gestão Financeira
 
-Projeto do desafio da Beca Bradesco Java (NTT DATA). A API de gestão financeira é formada por dois microsserviços que, ao final, sobem juntos com Docker Compose.
+Projeto do **Desafio Beca Java (NTT DATA)**: duas APIs REST em Java que cadastram usuários e registram transações financeiras (depósito, retirada, transferência e compra), com regras de aprovação, câmbio, análise de despesas e relatório em CSV.
 
-| Serviço | O que faz | Situação |
-|---|---|---|
-| **MS1 User Service** (`ms1-usuarios/`) | Cadastro e manutenção de usuários, importação em massa por CSV | CRUD, CSV, senha com BCrypt, Flyway, testes e Swagger prontos. Falta o login (Spring Security) |
-| **MS2 Transaction Service** (`ms2-transacoes/`) | Transações, saldo e limites, câmbio, análise de despesas, relatório e segurança | Criação e consulta de transações, regras de aprovação e integração com a API Mock prontas. Faltam câmbio, análise de despesas, relatório e autenticação |
+## Visão geral
 
-O acompanhamento das tarefas está no quadro Kanban do Jira (espaço **Desafio Beca Java**, chave `DBJ`). Os commits trazem a chave do cartão na mensagem.
+| Serviço | Porta | Banco (porta no seu computador) | Função |
+|---|---|---|---|
+| **MS1 — usuários** (`ms1-usuarios`) | 8081 | `user-db` (5434) | Cadastro, importação por CSV e verificação de login |
+| **MS2 — transações** (`ms2-transacoes`) | 8082 | `transaction-db` (5435) | Transações, saldo, análise de despesas e relatório |
+
+O MS2 consulta duas APIs externas: a **API Mock** (saldo e limites do usuário, hospedada no mockapi.io) e a **BrasilAPI** (câmbio).
+
+```
+Cliente --(Basic Auth)--> MS2 ---(POST /auth/login + chave interna)--> MS1 --> user-db
+                           |--> API Mock  (saldo e limites)
+                           |--> BrasilAPI (cotação USD e EUR)
+                           '--> transaction-db
+```
 
 ## Tecnologias
 
-- Java 21 e Spring Boot 4 (Web, Data JPA, Validation, Actuator)
-- PostgreSQL 16 (um banco por serviço) e Docker Compose
-- Flyway (migrations do banco)
-- BCrypt (`spring-security-crypto`) para as senhas
-- Apache Commons CSV para a importação
-- `RestClient` (Spring) para as APIs externas
-- springdoc-openapi (Swagger UI)
-- JUnit 5, Mockito e AssertJ nos testes
+Java 21, Spring Boot 4.1.2, Maven, PostgreSQL 16, Flyway (migrations), Spring Security (MS2), Springdoc/Swagger, JUnit 5, Mockito, JaCoCo e Docker Compose. Cada serviço segue a **arquitetura hexagonal**: `domain` (regras, sem framework), `application` (casos de uso e portas) e `adapter` (web, banco e clientes HTTP).
 
-## Arquitetura (hexagonal)
+## Como subir o ambiente do zero
 
-Nos dois serviços o domínio não conhece Spring, JPA nem HTTP. A dependência sempre aponta para dentro: `adapter` → `application` → `domain`.
+**Pré-requisitos:** Docker Desktop. Para rodar pela IDE, JDK 21. Para os dados de exemplo, PowerShell (Windows).
 
-### MS1
+**1. API Mock (uma vez):** no mockapi.io, crie um projeto com o recurso `accounts` e os campos `userId` (número), `balance`, `dailyLimit` e `perTransactionLimit` (números). Guarde a URL base (termina em `/api/v1`).
 
-```
-ms1-usuarios/src/main/java/br/com/tauan/ms1_usuarios/
-├── domain/
-│   ├── model/                  User (Java puro, com changeData e changePasswordHash)
-│   └── exception/              UserNotFoundException, EmailAlreadyRegisteredException, InvalidCsvFileException
-├── application/
-│   ├── port/in/                Casos de uso (uma porta por operação) e comandos
-│   ├── port/out/               UserRepositoryPort, PasswordEncoderPort
-│   └── service/                UserService, ImportUsersService
-└── adapter/
-    ├── in/web/                 Controllers REST, DTOs, CsvUserParser, tratamento de erros, OpenAPI
-    └── out/
-        ├── persistence/        Entidade JPA, repositório Spring Data e UserPersistenceAdapter
-        └── security/           BcryptPasswordEncoderAdapter
-```
+**2. Variáveis de ambiente:** copie `.env.example` para `.env` e preencha.
 
-### MS2
-
-```
-ms2-transacoes/src/main/java/br/com/tauan/ms2_transacoes/
-├── domain/
-│   ├── model/                  Transaction (imutável), TransactionPolicy, TransactionDecision,
-│   │                           AccountInfo, enums (TransactionType, TransactionStatus, Category)
-│   └── exception/              InvalidTransactionException, TransactionNotFoundException,
-│                               AccountServiceUnavailableException
-├── application/
-│   ├── port/in/                Casos de uso (criar, consultar e listar transações) e comandos
-│   ├── port/out/               TransactionRepositoryPort, AccountPort
-│   └── service/                CreateTransactionService, QueryTransactionsService
-├── adapter/
-│   ├── in/web/                 Controllers, DTOs e tratamento de erros (400, 404 e 503)
-│   └── out/
-│       ├── persistence/        Entidade JPA, repositório Spring Data e adapter
-│       └── client/             Cliente HTTP da API Mock (saldo e limites)
-└── config/                     Beans (relógio e política de aprovação)
-```
-
-## Como rodar
-
-### Pré-requisitos
-
-- JDK 21
-- Docker Desktop (com o Docker Compose)
-- Git
-
-### 1. Clonar e configurar as variáveis de ambiente
-
-```bash
-git clone git@github.com:TauanAnjos/desafio-beca-java.git
-cd desafio-beca-java
-cp .env.example .env
-```
-
-Edite o `.env` e troque os valores de exemplo por valores reais. **Nunca suba o `.env` para o GitHub** (ele está no `.gitignore`).
-
-| Variável | Quem usa | Para que serve |
-|---|---|---|
-| `USER_DB_NAME`, `USER_DB_USER`, `USER_DB_PASSWORD` | MS1 e Compose | Banco de usuários |
-| `USER_DB_PORT` | Compose | Porta do banco de usuários no seu computador (padrão `5434`) |
-| `TRANSACTION_DB_NAME`, `TRANSACTION_DB_USER`, `TRANSACTION_DB_PASSWORD` | MS2 e Compose | Banco de transações |
-| `TRANSACTION_DB_PORT` | MS2 e Compose | Porta do banco de transações no seu computador (padrão `5435`) |
-| `MOCK_API_BASE_URL` | MS2 | URL base da API Mock de saldo e limites (veja a seção da API Mock) |
-
-### 2. Subir os bancos
-
-```bash
-docker compose up -d
-docker compose ps
-```
-
-Os dois containers (`user-db` e `transaction-db`) devem ficar `healthy`. O Compose lê o `.env` sozinho.
-
-> O esquema de cada banco é criado pelo Flyway quando o serviço sobe (arquivos em `src/main/resources/db/migration` de cada serviço). Se você mudar usuário ou senha no `.env` depois que o banco já foi criado, o Postgres mantém os valores antigos: recrie os volumes (apaga os dados) com `docker compose down -v` e `docker compose up -d`.
-
-### 3. Configurar a API Mock (MS2)
-
-O saldo e os limites da conta não ficam no nosso banco: vêm de um serviço simulado no [mockapi.io](https://mockapi.io).
-
-1. Crie uma conta gratuita e um projeto
-2. Crie o recurso **`accounts`** com os campos:
-
-| Campo | Tipo | Exemplo |
-|---|---|---|
-| `userId` | Number | `1` |
-| `balance` | Number | `1000.00` |
-| `dailyLimit` | Number | `5000.00` |
-| `perTransactionLimit` | Number | `2000.00` |
-
-3. Crie pelo menos um registro por usuário, por exemplo:
-
-```json
-{ "userId": 1, "balance": 1000.00, "dailyLimit": 5000.00, "perTransactionLimit": 2000.00 }
-```
-
-4. Coloque no `.env` a URL base do projeto, **sem** `/accounts` no final:
-
-```
-MOCK_API_BASE_URL=https://SEU_ID.mockapi.io/api/v1
-```
-
-O MS2 consulta `GET {MOCK_API_BASE_URL}/accounts?userId={id}`. O tempo limite é de 3 segundos (propriedade opcional `mockapi.timeout-ms`). Se a API Mock falhar ou demorar, a transação não é aprovada às cegas: a resposta é 503 e nada é gravado.
-
-### 4. Rodar um serviço
-
-Cada serviço lê suas variáveis do ambiente:
-
-| Serviço | Variáveis | Porta |
-|---|---|---|
-| MS1 | `USER_DB_NAME`, `USER_DB_USER`, `USER_DB_PASSWORD` (a URL aponta para `localhost:5434`) | 8081 |
-| MS2 | `TRANSACTION_DB_NAME`, `TRANSACTION_DB_USER`, `TRANSACTION_DB_PASSWORD`, `TRANSACTION_DB_PORT` (opcional, padrão 5435), `MOCK_API_BASE_URL` | 8082 |
-
-#### Pelo IntelliJ IDEA
-
-O IntelliJ não lê o `.env` sozinho. Configure uma vez para cada serviço:
-
-1. **Run → Edit Configurations → +  → Application**
-2. **Name:** `Ms1UsuariosApplication` (ou `Ms2TransacoesApplication`)
-3. **Main class:** `br.com.tauan.ms1_usuarios.Ms1UsuariosApplication` (ou `br.com.tauan.ms2_transacoes.Ms2TransacoesApplication`)
-4. **Module (`-cp`):** `ms1-usuarios` (ou `ms2-transacoes`)
-5. **Modify options → Environment variables** e preencha com os valores do seu `.env`, separados por `;`:
-   ```
-   USER_DB_NAME=...;USER_DB_USER=...;USER_DB_PASSWORD=...
-   ```
-   ou, no MS2:
-   ```
-   TRANSACTION_DB_NAME=...;TRANSACTION_DB_USER=...;TRANSACTION_DB_PASSWORD=...;MOCK_API_BASE_URL=https://SEU_ID.mockapi.io/api/v1
-   ```
-6. Rode com o botão ▶
-
-Os valores ficam na pasta `.idea`, que está no `.gitignore`.
-
-#### Pelo terminal (carregando o `.env`)
-
-PowerShell, a partir de `ms1-usuarios/` ou `ms2-transacoes/`:
-
-```powershell
-Get-Content ..\.env | Where-Object { $_ -match '^\s*[^#\s].*=' } | ForEach-Object {
-    $name, $value = $_ -split '=', 2
-    Set-Item -Path "Env:$($name.Trim())" -Value $value.Trim()
-}
-.\mvnw spring-boot:run
-```
-
-Bash (Git Bash, Linux, macOS), a partir de `ms1-usuarios/` ou `ms2-transacoes/`:
-
-```bash
-set -a; source ../.env; set +a
-./mvnw spring-boot:run
-```
-
-## Documentação da API (Swagger)
-
-Com o MS1 no ar: `http://localhost:8081/swagger-ui/index.html`
-
-A especificação OpenAPI em JSON fica em `http://localhost:8081/v3/api-docs`. O Swagger do MS2 entra em uma tarefa própria do quadro.
-
-## Endpoints do MS1
-
-| Método | Rota | Descrição | Respostas |
-|---|---|---|---|
-| POST | `/users` | Cria usuário | 201, 400, 409 |
-| GET | `/users` | Lista usuários | 200 |
-| GET | `/users/{id}` | Busca por id | 200, 404 |
-| PUT | `/users/{id}` | Atualiza usuário | 200, 400, 404, 409 |
-| DELETE | `/users/{id}` | Exclui usuário | 204, 404 |
-| POST | `/users/import` | Importa usuários por CSV (`multipart/form-data`, campo `file`) | 200, 400 |
-
-Regras:
-- O e-mail é normalizado (sem espaços, em minúsculas) no cadastro, na atualização e na importação, e é único.
-- A senha tem de 8 a 72 caracteres, é guardada com BCrypt e **nunca** aparece nas respostas.
-- No `PUT` a senha é opcional: se vier, é recriptografada; se não vier, a atual é mantida.
-- Erros usam `ProblemDetail`. Validação responde 400 com a lista de campos em `fields`. E-mail duplicado, inclusive em requisições simultâneas, responde 409.
-
-## Endpoints do MS2
-
-> **Provisório:** enquanto a autenticação não existe, o dono da transação vem do cabeçalho `X-User-Id`. As tarefas de segurança substituem esse cabeçalho pelo usuário autenticado.
-
-| Método | Rota | Descrição | Respostas |
-|---|---|---|---|
-| POST | `/transactions` | Registra uma transação (depósito, retirada, transferência ou compra) | 201, 400, 503 |
-| GET | `/transactions/{id}` | Consulta uma transação do usuário | 200, 404 |
-| GET | `/transactions` | Lista as transações do usuário, da mais recente para a mais antiga | 200, 400 |
-
-- `POST` responde **201** tanto para transação aprovada quanto para rejeitada: o resultado vem em `status` (`APPROVED` ou `REJECTED`) e `rejectionReason`. Pedido inválido responde 400 sem consultar a API Mock. Se a API Mock estiver fora do ar, responde 503 e nada é gravado
-- `GET /transactions` aceita os filtros opcionais `from` e `to` (`yyyy-MM-dd`, o dia `to` entra por inteiro) e `type` (`DEPOSIT`, `WITHDRAWAL`, `TRANSFER`, `PURCHASE`). `from` depois de `to` responde 400
-- Transação de outro usuário responde 404
-
-Exemplo de corpo do `POST`:
-
-```json
-{ "type": "PURCHASE", "amount": 50.00, "description": "Mercado", "category": "FOOD" }
-```
-
-## Importação em massa (CSV)
-
-Arquivo de exemplo: [`exemplos/usuarios.csv`](exemplos/usuarios.csv)
-
-```csv
-name,email,password
-Ana Souza,ana.souza@exemplo.com,Senha@1234
-"Souza, Carla Dias",carla.dias@exemplo.com,Senha@1234
-```
-
-- Cabeçalho obrigatório: `name,email,password`
-- Separador: vírgula ou ponto e vírgula (detectado pelo cabeçalho). O BOM do Excel é tratado e nomes entre aspas podem ter vírgula
-- Cada linha é validada. Linhas inválidas **não derrubam** o arquivo: a resposta traz `imported`, `skipped` e a lista `errors` com a linha e o motivo
-- E-mail repetido dentro do arquivo ou já cadastrado é falha só daquela linha
-
-Exemplo de resposta:
-
-```json
-{
-  "imported": 4,
-  "skipped": 1,
-  "errors": [{ "line": 3, "reason": "invalid email" }]
-}
-```
-
-## Regras de negócio do MS2
-
-Toda transação termina em **APPROVED** ou **REJECTED** (com o motivo) e nunca é apagada.
-
-| Tipo | Regra |
+| Variável | Para que serve |
 |---|---|
-| Depósito | Sempre aprovado. Não consulta a API Mock |
-| Retirada, transferência e compra | Consultam saldo e limites na API Mock. Sem conta: `account not found for the user` |
-| | 1º valor dentro do **saldo disponível** (saldo da API Mock menos as despesas aprovadas do dia), senão `insufficient balance` |
-| | 2º valor dentro do limite por transação, senão `amount exceeds the per-transaction limit` |
-| | 3º gasto do dia mais o valor dentro do limite diário, senão `daily limit exceeded` |
+| `USER_DB_NAME`, `USER_DB_USER`, `USER_DB_PASSWORD`, `USER_DB_PORT` | Banco do MS1 |
+| `TRANSACTION_DB_NAME`, `TRANSACTION_DB_USER`, `TRANSACTION_DB_PASSWORD`, `TRANSACTION_DB_PORT` | Banco do MS2 |
+| `MOCK_API_BASE_URL` | URL base da API Mock (sem `/accounts` no final) |
+| `INTERNAL_API_KEY` | Chave que só o MS2 envia ao MS1 no login. **Obrigatória**, use um valor longo e aleatório |
+| `USERS_SERVICE_URL` | Onde o MS2 encontra o MS1. Padrão `http://localhost:8081`; no Compose é `http://ms1-usuarios:8081` |
+| `BRASILAPI_BASE_URL` | Opcional. Padrão `https://brasilapi.com.br/api` |
 
-O MS2 não debita o saldo da API Mock, por isso o saldo disponível desconta o que já foi aprovado no dia. Só retiradas, transferências e compras aprovadas contam como despesa.
+**3. Subir tudo com um comando:**
 
-Consistência da transação, validada no domínio:
-- Valor maior que zero, com no máximo 2 casas decimais
-- Descrição obrigatória, até 255 caracteres
-- Transferência exige usuário de destino diferente do dono. Nos outros tipos, o destino é proibido
-- Compra exige categoria. Nos outros tipos, sem categoria vira `OTHER`
-- Categorias (lista fixa): `FOOD`, `TRANSPORT`, `HOUSING`, `HEALTH`, `EDUCATION`, `LEISURE`, `SHOPPING`, `OTHER`
-- Transação rejeitada sempre guarda o motivo; aprovada não tem motivo
-
-## Decisões de projeto
-
-- **Câmbio:** a taxa será guardada na transação, no momento da criação (snapshot), e não consultada a cada leitura. Assim o valor convertido não muda depois e a consulta nunca depende da BrasilAPI. Se a BrasilAPI estiver fora do ar na criação, a transação é criada sem taxas e a resposta sinaliza que a conversão não está disponível
-- **Migrations:** o esquema de cada banco é versionado com Flyway e o Hibernate só valida (`ddl-auto=validate`)
-- **Pasta das migrations:** `src/main/resources/db/migration` (uma pasta `db` com `migration` dentro, não um pacote com ponto)
-- **Criação de transação sem `@Transactional`:** a chamada HTTP à API Mock não deve segurar uma conexão do banco
-- **Correção de transação sem apagar:** em definição (estorno como nova transação)
-
-## Testes
-
-Em cada serviço (`ms1-usuarios/` ou `ms2-transacoes/`):
-
-```bash
-./mvnw test        # Windows PowerShell: .\mvnw test
+```
+docker compose up -d --build
 ```
 
-- MS1: testes unitários do `UserService` e do `ImportUsersService`
-- MS2: testes do domínio (`Transaction`, `TransactionPolicy`), dos casos de uso, dos controllers (MockMvc), do tratamento de erros e do adapter da API Mock (servidor HTTP simulado e teste de timeout)
+Sobe os dois bancos, o MS1 e o MS2. O Flyway cria as tabelas sozinho. Os dados dos bancos ficam em volumes do Docker: `docker compose down` mantém os dados e `docker compose down -v` apaga tudo.
 
-Todos rodam sem banco e sem internet. O relatório de cobertura será configurado em uma tarefa própria do quadro (JaCoCo).
+**4. Dados de exemplo (opcional, recomendado):**
 
-## Segurança
+```
+powershell -ExecutionPolicy Bypass -File .\scripts\seed-demo.ps1
+```
 
-- Nenhum segredo no repositório: senhas, usuários do banco e a URL da API Mock vêm de variáveis de ambiente, com o `.env.example` versionado só com valores fictícios
-- O `.env` e a pasta `.idea` estão no `.gitignore`
-- Autenticação com usuário e senha (Spring Security) está planejada nas tarefas de login do MS1 e das rotas do MS2
+Cria três usuários (`ana@demo.com`, `bruno@demo.com` e `carla@demo.com`, senha `Senha@1234`), as contas deles na API Mock (se faltarem) e transações de exemplo em todas as categorias, com saídas aprovadas e rejeitadas. Pode ser rodado várias vezes: o que já existe é reaproveitado.
 
-## Fluxo de trabalho
+**Rodando pela IDE (alternativa):** suba só os bancos (`docker compose up -d user-db transaction-db`) e rode as duas aplicações. O IntelliJ não lê o `.env`: coloque as variáveis na *Run Configuration* de cada serviço.
 
-- Uma branch por atividade, com o código do Jira no nome (`feature/DBJ-39-...`) e nos commits (`feat: DBJ-39 ...`)
-- Pull Request aberto e revisado antes de entrar na `main`; merge feito com merge commit
+## Documentação interativa (Swagger)
+
+| Serviço | Endereço |
+|---|---|
+| MS1 | http://localhost:8081/swagger-ui/index.html |
+| **MS2** | **http://localhost:8082/swagger-ui.html** |
+
+No MS2, clique em **Authorize** e informe o e-mail e a senha de um usuário. Observações de uso:
+
+- Abra o Swagger por **localhost** (e não pelo IP da máquina), senão o navegador pode abrir o próprio prompt de login.
+- Para baixar o CSV, use o Swagger (resposta da rota `/reports/transactions`) ou uma janela anônima. Se digitar a senha no prompt do navegador, ele a guarda e o Authorize pode ficar confuso.
+
+## Autenticação
+
+- O MS2 usa **HTTP Basic** (e-mail e senha do usuário cadastrado no MS1). Sem credenciais ou com senha errada: **401**.
+- O MS2 valida as credenciais chamando `POST /auth/login` do MS1, que confere a senha (BCrypt). E-mail inexistente e senha errada devolvem a mesma resposta, e o tempo de resposta é igualado para não revelar quais e-mails existem.
+- O login do MS1 é **interno**: exige o cabeçalho `X-Internal-Key` com a `INTERNAL_API_KEY`. Sem a chave: **403**.
+- O dono da transação é sempre o usuário autenticado (o corpo da requisição não traz usuário).
+- Abertos sem login: `/actuator/health` e a documentação (Swagger) do MS2, e no MS1 o cadastro de usuário.
+- MS1 fora do ar ou lento: **503** no MS2.
+
+## Endpoints do MS1 (usuários)
+
+| Método e rota | O que faz |
+|---|---|
+| `POST /users` | Cadastra um usuário (e-mail único; senha guardada com BCrypt e nunca devolvida) |
+| `GET /users` e `GET /users/{id}` | Lista e consulta |
+| `PUT /users/{id}` | Atualiza (a senha é opcional) |
+| `DELETE /users/{id}` | Remove |
+| `POST /users/import` | Importa usuários de um CSV (`name,email,password`) e devolve o resumo. Exemplo em `exemplos/usuarios.csv` |
+| `POST /auth/login` | Verificação de credenciais (interna, usada pelo MS2) |
+
+## Endpoints do MS2 (transações)
+
+Todos exigem Basic Auth.
+
+| Método e rota | O que faz |
+|---|---|
+| `POST /transactions` | Cria uma transação (aprovada ou rejeitada com o motivo) |
+| `GET /transactions` | Lista as do usuário. Filtros: `from`, `to` (AAAA-MM-DD) e `type`. `userId` de outro usuário: **403** |
+| `GET /transactions/{id}` | Consulta uma transação (de outro usuário: 404) |
+| `GET /balance` | Saldo atual da API Mock e saldo disponível do dia |
+| `GET /expenses/summary` | Despesas: total geral e por categoria, por dia e por mês. Sem período, o mês atual |
+| `GET /reports/transactions` | Relatório em CSV. Sem período, o mês atual |
+
+Erros seguem o formato `ProblemDetail` (JSON com `title`, `status` e `detail`); o 400 de validação traz a lista de campos em `fields`.
+
+## Regras das transações
+
+- **Tipos:** `DEPOSIT`, `WITHDRAWAL`, `TRANSFER` e `PURCHASE`. São despesas (saídas) a retirada, a transferência enviada e a compra.
+- **Categorias:** `FOOD`, `TRANSPORT`, `HOUSING`, `HEALTH`, `EDUCATION`, `LEISURE`, `SHOPPING` e `OTHER`. Obrigatória na compra; nos outros tipos vale `OTHER`.
+- **Validações:** valor maior que zero com no máximo 2 casas decimais; descrição obrigatória (até 255 caracteres); na transferência, o destinatário é obrigatório e diferente do dono.
+- **Aprovação das saídas** (nesta ordem): saldo disponível, limite por transação e limite diário. A saída que não passa é gravada como `REJECTED` com o motivo (`insufficient balance`, `amount exceeds the per-transaction limit`, `daily limit exceeded` ou `account not found for the user`). Depósitos não consultam a API Mock.
+- **Saldo disponível** = saldo da API Mock + depósitos aprovados do dia − despesas aprovadas do dia. O limite diário conta só despesas.
+- **"Dia" é o dia de São Paulo** (`America/Sao_Paulo`), independente do fuso do servidor.
+- **API Mock fora do ar ou lenta** (timeout de 3 s): a saída não é aprovada às cegas; responde **503** e nada é gravado.
+
+## Câmbio
+
+- Fonte: BrasilAPI, `GET /cambio/v1/cotacao/{moeda}/{data}` (boletins PTAX do Banco Central). Usa a cotação de **venda** do boletim de **fechamento** de ontem (a fonte não expõe o dia corrente; em fim de semana e feriado, a própria BrasilAPI devolve o último dia útil).
+- A cotação de **USD** e **EUR** é **guardada na transação no momento da criação** (tabela `transaction_exchange_rates`). Ler a transação nunca chama a BrasilAPI.
+- A resposta traz `conversionAvailable` e a lista `conversions` (moeda, taxa, data da taxa e valor convertido). `conversionAvailable` só é `true` quando as **duas moedas** foram obtidas.
+- BrasilAPI fora do ar ou lenta (timeout de 2 s): a transação é criada normalmente, sem taxas, com `conversionAvailable: false`.
+
+## Relatório em CSV
+
+`GET /reports/transactions` devolve um arquivo para o Excel em português: UTF-8 com BOM (acentos corretos), separador ponto e vírgula, vírgula decimal e datas `dd/MM/yyyy HH:mm:ss`. Colunas: data, tipo, categoria, descrição, valor em R$, status, motivo da rejeição, valor em USD e valor em EUR. Descrições que começam com `=`, `+`, `-` ou `@` são neutralizadas (proteção contra injeção de fórmula).
+
+## Testes e cobertura
+
+Em cada serviço (`ms1-usuarios` e `ms2-transacoes`):
+
+```
+.\mvnw test
+```
+
+O build gera o relatório de cobertura (JaCoCo) em `target/site/jacoco/index.html`. Cobertura medida em 10/11/2026:
+
+| Serviço | Instruções | Ramos |
+|---|---|---|
+| MS2 | 86% | 87% |
+| MS1 | 51% | 64% |
+
+No MS1 os casos de uso estão em 97%; o que reduz o total são os controllers e a camada de persistência. No MS2, a camada de persistência (JPA) não tem testes automatizados, porque exigiria um banco real (Testcontainers).
+
+## Decisões e limitações conhecidas
+
+- **Saldo disponível considera apenas o dia atual.** Não há extrato acumulado de dias anteriores: o saldo base é sempre o da API Mock.
+- **A transferência recebida ainda não é creditada** ao destinatário, e o destinatário não é conferido no MS1.
+- **Não há rota para apagar nem alterar transações.** A correção por estorno (nova transação ligada à original) foi decidida, mas não implementada neste prazo.
+- **O login não limita tentativas** (força bruta não coberta). Ele é protegido pela chave interna, mas dentro do sistema não há bloqueio por excesso de tentativas.
+- A cada requisição o MS2 consulta o MS1 para autenticar (sem cache).
+- Com a BrasilAPI fora do ar, cada criação espera até o timeout (2 s por moeda) antes de seguir sem as taxas.
+- O script de dados de exemplo é em PowerShell (Windows).
+
+## Estrutura do repositório
+
+```
+ms1-usuarios/      serviço de usuários (porta 8081)
+ms2-transacoes/    serviço de transações (porta 8082)
+scripts/           seed-demo.ps1 (dados de exemplo)
+exemplos/          usuarios.csv (importação)
+docker-compose.yml bancos, MS1 e MS2
+.env.example       modelo das variáveis de ambiente
+```
