@@ -12,6 +12,8 @@ import java.io.IOException;
 @Component
 public class ApiAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
+    private static final String FETCH_DEST_HEADER = "Sec-Fetch-Dest";
+
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response,
                          AuthenticationException authException) throws IOException {
@@ -23,8 +25,16 @@ public class ApiAuthenticationEntryPoint implements AuthenticationEntryPoint {
             return;
         }
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        response.setHeader("WWW-Authenticate", "Basic realm=\"transactions\"");
+        // Em chamadas de script (fetch/XHR, como o Swagger UI) o cabeçalho faria o navegador abrir o prompt
+        // nativo de login. Em navegação direta (ex.: download do CSV) e em clientes como o Postman, é mantido.
+        if (!isScriptRequest(request)) {
+            response.setHeader("WWW-Authenticate", "Basic realm=\"transactions\"");
+        }
         response.getWriter().write(
                 "{\"title\":\"Unauthorized\",\"status\":401,\"detail\":\"Authentication is required with valid credentials\"}");
+    }
+
+    private boolean isScriptRequest(HttpServletRequest request) {
+        return "empty".equalsIgnoreCase(request.getHeader(FETCH_DEST_HEADER));
     }
 }

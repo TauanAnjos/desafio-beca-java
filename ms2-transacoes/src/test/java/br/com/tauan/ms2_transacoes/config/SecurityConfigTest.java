@@ -151,4 +151,11 @@ class SecurityConfigTest {
         mockMvc.perform(get("/actuator/health"))
                 .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotEqualTo(401));
     }
+    @Test
+    void documentationEndpoints_areNotProtected() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotEqualTo(401));
+        mockMvc.perform(get("/swagger-ui.html"))
+                .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotEqualTo(401));
+    }
 }
