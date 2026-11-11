@@ -1,6 +1,7 @@
 package br.com.tauan.ms2_transacoes.adapter.out.persistence;
 
 import br.com.tauan.ms2_transacoes.application.port.out.TransactionRepositoryPort;
+import br.com.tauan.ms2_transacoes.domain.model.ExchangeRate;
 import br.com.tauan.ms2_transacoes.domain.model.Transaction;
 import br.com.tauan.ms2_transacoes.domain.model.TransactionStatus;
 import br.com.tauan.ms2_transacoes.domain.model.TransactionType;
@@ -8,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -78,12 +80,20 @@ public class TransactionPersistenceAdapter implements TransactionRepositoryPort 
         entity.setStatus(transaction.getStatus());
         entity.setRejectionReason(transaction.getRejectionReason());
         entity.setOccurredAt(transaction.getOccurredAt());
+        List<ExchangeRateEmbeddable> rates = new ArrayList<>();
+        for (ExchangeRate rate : transaction.getExchangeRates()) {
+            rates.add(new ExchangeRateEmbeddable(rate.currency(), rate.rate(), rate.rateDate()));
+        }
+        entity.setExchangeRates(rates);
         return entity;
     }
 
     private Transaction toDomain(TransactionJpaEntity entity) {
+        List<ExchangeRate> rates = entity.getExchangeRates().stream()
+                .map(rate -> new ExchangeRate(rate.getCurrency(), rate.getRate(), rate.getRateDate()))
+                .toList();
         return Transaction.restore(entity.getId(), entity.getUserId(), entity.getType(), entity.getAmount(),
                 entity.getDescription(), entity.getCategory(), entity.getDestinationUserId(),
-                entity.getStatus(), entity.getRejectionReason(), entity.getOccurredAt());
+                entity.getStatus(), entity.getRejectionReason(), entity.getOccurredAt(), rates);
     }
 }

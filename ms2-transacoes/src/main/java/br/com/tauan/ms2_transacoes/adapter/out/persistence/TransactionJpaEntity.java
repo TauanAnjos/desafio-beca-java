@@ -3,18 +3,24 @@ package br.com.tauan.ms2_transacoes.adapter.out.persistence;
 import br.com.tauan.ms2_transacoes.domain.model.Category;
 import br.com.tauan.ms2_transacoes.domain.model.TransactionStatus;
 import br.com.tauan.ms2_transacoes.domain.model.TransactionType;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "transactions",
@@ -55,6 +61,11 @@ public class TransactionJpaEntity {
     @Column(name = "occurred_at", nullable = false)
     private LocalDateTime occurredAt;
 
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "transaction_exchange_rates",
+            joinColumns = @JoinColumn(name = "transaction_id"))
+    private List<ExchangeRateEmbeddable> exchangeRates = new ArrayList<>();
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public Long getUserId() { return userId; }
@@ -75,4 +86,6 @@ public class TransactionJpaEntity {
     public void setRejectionReason(String rejectionReason) { this.rejectionReason = rejectionReason; }
     public LocalDateTime getOccurredAt() { return occurredAt; }
     public void setOccurredAt(LocalDateTime occurredAt) { this.occurredAt = occurredAt; }
+    public List<ExchangeRateEmbeddable> getExchangeRates() { return exchangeRates; }
+    public void setExchangeRates(List<ExchangeRateEmbeddable> exchangeRates) { this.exchangeRates = exchangeRates; }
 }

@@ -6,7 +6,9 @@ import br.com.tauan.ms2_transacoes.domain.model.TransactionStatus;
 import br.com.tauan.ms2_transacoes.domain.model.TransactionType;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 public record TransactionResponse(
         Long id,
@@ -18,10 +20,27 @@ public record TransactionResponse(
         Long destinationUserId,
         TransactionStatus status,
         String rejectionReason,
-        LocalDateTime occurredAt
+        LocalDateTime occurredAt,
+        boolean conversionAvailable,
+        List<Conversion> conversions
 ) {
 
+    /**
+     * A conversão só está disponível quando as duas moedas (USD e EUR) foram obtidas.
+     */
+    private static final int REQUIRED_CURRENCIES = 2;
+
+    /**
+     * O valor "amount" é o original, em reais. A taxa é de reais por unidade da moeda.
+     */
+    public record Conversion(String currency, BigDecimal rate, LocalDate rateDate, BigDecimal convertedAmount) {
+    }
+
     public static TransactionResponse from(Transaction transaction) {
+        List<Conversion> conversions = transaction.getExchangeRates().stream()
+                .map(rate -> new Conversion(rate.currency(), rate.rate(), rate.rateDate(),
+                        rate.convertFromBrl(transaction.getAmount())))
+                .toList();
         return new TransactionResponse(
                 transaction.getId(),
                 transaction.getUserId(),
@@ -32,6 +51,8 @@ public record TransactionResponse(
                 transaction.getDestinationUserId(),
                 transaction.getStatus(),
                 transaction.getRejectionReason(),
-                transaction.getOccurredAt());
+                transaction.getOccurredAt(),
+                conversions.size() >= REQUIRED_CURRENCIES,
+                conversions);
     }
 }
